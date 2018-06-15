@@ -119,9 +119,11 @@ class MtListBudget(object):
 
         # trim the lists so that they are all the same length
         # in case of a read fail
-        min_len = 1e+10
-        for i, lst in self.gw_data.items():
-            min_len = min(min_len, len(lst))
+        # min_len = 1e+10
+        # for i, lst in self.gw_data.items():
+        #     min_len = min(min_len, len(lst))
+        smallest_entry = min(self.gw_data.items(), key=lambda (k, v): len(v))
+        min_len = len(self.gw_data[smallest_entry])
         for i, lst in self.gw_data.items():
             self.gw_data[i] = lst[:min_len]
         df_gw = pd.DataFrame(self.gw_data)
@@ -148,9 +150,11 @@ class MtListBudget(object):
         if len(self.sw_data) > 0:
             # trim the lists so that they are all the same lenght
             # in case of a read fail
-            min_len = 1e+10
-            for i, lst in self.sw_data.items():
-                min_len = min(min_len, len(lst))
+            # min_len = 1e+10
+            # for i, lst in self.sw_data.items():
+            #     min_len = min(min_len, len(lst))
+            smallest_entry = min(self.sw_data.items(), key=lambda (k, v): len(v))
+            min_len = len(self.sw_data[smallest_entry])
             min_len = min(min_len, df_gw.shape[0])
             for i, lst in self.sw_data.items():
                 self.sw_data[i] = lst[:min_len]
@@ -184,8 +188,9 @@ class MtListBudget(object):
         except ImportError:
             print("must use pandas")
             return
-        out_cols = [c for c in df.columns if "_out" in c]
-        in_cols = [c for c in df.columns if "_in" in c]
+        df_cols = df.columns
+        out_cols = [c for c in df_cols if "_out" in c]
+        in_cols = [c for c in df_cols if "_in" in c]
         out_base = [c.replace("_out", '') for c in out_cols]
         in_base = [c.replace("_in", '') for c in in_cols]
         in_dict = {ib: ic for ib, ic in zip(in_base, in_cols)}
