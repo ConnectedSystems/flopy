@@ -11,6 +11,9 @@ import numpy as np
 
 from ..utils.utils_def import totim_to_datetime
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class MtListBudget(object):
     """
@@ -114,7 +117,7 @@ class MtListBudget(object):
         if len(self.gw_data) == 0:
             raise Exception("no groundwater budget info found...")
 
-        # trim the lists so that they are all the same lenght
+        # trim the lists so that they are all the same length
         # in case of a read fail
         min_len = 1e+10
         for i, lst in self.gw_data.items():
@@ -183,7 +186,7 @@ class MtListBudget(object):
             return
         out_cols = [c for c in df.columns if "_out" in c]
         in_cols = [c for c in df.columns if "_in" in c]
-        out_base =[c.replace("_out", '') for c in out_cols]
+        out_base = [c.replace("_out", '') for c in out_cols]
         in_base = [c.replace("_in", '') for c in in_cols]
         in_dict = {ib: ic for ib, ic in zip(in_base, in_cols)}
         out_dict = {ib: ic for ib, ic in zip(out_base, out_cols)}
@@ -204,7 +207,7 @@ class MtListBudget(object):
                 idata = 0.0
             new[col] = idata - odata
 
-        return pd.DataFrame(new,index=df.index)
+        return pd.DataFrame(new, index=df.index)
 
     def _readline(self, f):
         line = f.readline().lower()

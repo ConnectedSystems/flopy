@@ -9,11 +9,16 @@ MODFLOW Guide
 """
 
 import sys
+
 import numpy as np
-from .mfpar import ModflowPar as mfpar
+
 from ..pakbase import Package
 from ..utils import Util2d, Util3d
 from ..utils.flopy_io import line_parse
+from .mfpar import ModflowPar as mfpar
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 
 class ModflowUpw(Package):
@@ -170,7 +175,6 @@ class ModflowUpw(Package):
         else:
             ipakcb = 0
 
-
         # Fill namefile items
         name = [ModflowUpw.ftype()]
         units = [unitnumber]
@@ -182,7 +186,6 @@ class ModflowUpw(Package):
         # Call ancestor's init to set self.parent, extension, name and unit number
         Package.__init__(self, model, extension=extension, name=name,
                          unit_number=units, extra=extra, filenames=fname)
-
 
         self.heading = '# {} package for '.format(self.name[0]) + \
                        ' {}, '.format(model.version_types[model.version]) + \
@@ -202,7 +205,8 @@ class ModflowUpw(Package):
         self.laywet = Util2d(model, (nlay,), np.int, laywet, name='laywet')
 
         self.options = ' '
-        if noparcheck: self.options = self.options + 'NOPARCHECK  '
+        if noparcheck:
+            self.options = self.options + 'NOPARCHECK  '
 
         self.hk = Util3d(model, (nlay, nrow, ncol), np.float32, hk, name='hk',
                          locat=self.unit_number[0])
@@ -255,15 +259,15 @@ class ModflowUpw(Package):
                                                                    self.iphdry,
                                                                    self.options))
         # LAYTYP array
-        f_upw.write(self.laytyp.string);
+        f_upw.write(self.laytyp.string)
         # LAYAVG array
-        f_upw.write(self.layavg.string);
+        f_upw.write(self.layavg.string)
         # CHANI array
-        f_upw.write(self.chani.string);
+        f_upw.write(self.chani.string)
         # LAYVKA array
         f_upw.write(self.layvka.string)
         # LAYWET array
-        f_upw.write(self.laywet.string);
+        f_upw.write(self.laywet.string)
         # Item 7: WETFCT, IWETIT, IHDWET
         iwetdry = self.laywet.sum()
         if iwetdry > 0:
@@ -344,9 +348,9 @@ class ModflowUpw(Package):
             print('   loading ipakcb, HDRY, NPUPW, IPHDRY...')
         t = line_parse(line)
         ipakcb, hdry, npupw, iphdry = int(t[0]), \
-                                      float(t[1]), \
-                                      int(t[2]), \
-                                      int(t[3])
+            float(t[1]), \
+            int(t[2]), \
+            int(t[3])
         # if ipakcb != 0:
         #     model.add_pop_key_list(ipakcb)
         #     ipakcb = 53
