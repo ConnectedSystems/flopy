@@ -79,7 +79,7 @@ class MtListBudget(object):
         """
         try:
             import pandas as pd
-        except:
+        except ImportError:
             print("must use pandas")
             return
         self.gw_data = {}
@@ -181,7 +181,7 @@ class MtListBudget(object):
     def _diff(self, df):
         try:
             import pandas as pd
-        except:
+        except ImportError:
             print("must use pandas")
             return
         out_cols = [c for c in df.columns if "_out" in c]
