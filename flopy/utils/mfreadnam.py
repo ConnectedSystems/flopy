@@ -60,6 +60,7 @@ class NamData(object):
     --------
 
     """
+
     def __init__(self, pkgtype, name, handle, packages):
         self.filehandle = handle
         self.filename = name
@@ -68,9 +69,9 @@ class NamData(object):
         if self.filetype.lower() in packages:
             self.package = packages[self.filetype.lower()]
 
-
     def __repr__(self):
-        return "filename:{0}, filetype:{1}".format(self.filename,self.filetype)
+        return "filename:{0}, filetype:{1}".format(self.filename, self.filetype)
+
 
 def getfiletypeunit(nf, filetype):
     """
@@ -132,74 +133,74 @@ def parsenamefile(namfilename, packages, verbose=True):
     if not os.path.isfile(namfilename):
         # help diagnose the namfile and directory
         raise IOError(
-                'Could not find {} in directory {}'
-                .format(namfilename, os.path.dirname(namfilename)))
+            'Could not find {} in directory {}'
+            .format(namfilename, os.path.dirname(namfilename)))
+    # with open(namfilename, 'r') as fp:
+    #     lines = fp.readlines()
     with open(namfilename, 'r') as fp:
-        lines = fp.readlines()
+        ln = 1  # line number
+        for line in fp:
+            line = line.strip()
+            if len(line) == 0 or line.startswith('#'):
+                # skip blank lines or comments
+                continue
+            items = line.split()
+            # ensure we have at least three items
+            if len(items) < 3:
+                raise ValueError('line number {} has fewer than 3 items: {}'
+                                 .format(ln, line))
+            ftype, key, fpath = items[0:3]
+            ftype = ftype.upper()
 
-    for ln, line in enumerate(lines, 1):
-        line = line.strip()
-        if len(line) == 0 or line.startswith('#'):
-            # skip blank lines or comments
-            continue
-        items = line.split()
-        # ensure we have at least three items
-        if len(items) < 3:
-            raise ValueError('line number {} has fewer than 3 items: {}'
-                             .format(ln, line))
-        ftype, key, fpath = items[0:3]
-        ftype = ftype.upper()
+            # remove quotes in file path
+            if '"' in fpath:
+                fpath = fpath.replace('"', '')
+            if "'" in fpath:
+                fpath = fpath.replace("'", "")
 
-        # remove quotes in file path
-        if '"' in fpath:
-            fpath = fpath.replace('"', '')
-        if "'" in fpath:
-            fpath = fpath.replace("'", "")
-
-        # need make filenames with paths system agnostic
-        if '/' in fpath:
-            raw = fpath.split('/')
-        elif '\\' in fpath:
-            raw = fpath.split('\\')
-        else:
-            raw = [fpath]
-        fpath = os.path.join(*raw)
-
-        fname = os.path.join(os.path.dirname(namfilename), fpath)
-        if not os.path.isfile(fname) or not os.path.exists(fname):
-            # change to lower and make comparison (required for linux)
-            dn = os.path.dirname(fname)
-            fls = os.listdir(dn)
-            lownams = [f.lower() for f in fls]
-            bname = os.path.basename(fname)
-            if bname.lower() in lownams:
-                idx = lownams.index(bname.lower())
-                fname = os.path.join(dn, fls[idx])
-        # open the file
-        openmode = 'r'
-        if ftype == 'DATA(BINARY)':
-            openmode = 'rb'
-        try:
-            filehandle = open(fname, openmode)
-        except IOError:
-            if verbose:
-                print('could not set filehandle to {0:s}'.format(fpath))
-            filehandle = None
-        # be sure the second value is an integer
-        try:
-            key = int(key)
-        except ValueError:
-            raise ValueError('line number {}: the unit number (second item) '
-                             'is not an integer: {}'.format(ln, line))
-        # Trap for the case where unit numbers are specified as zero
-        # In this case, the package must have a variable called
-        # unit number attached to it.  If not, then the key is set
-        # to fname
-        if key == 0:
-            ftype_lower = ftype.lower()
-            if ftype_lower in packages:
-                key = packages[ftype_lower].reservedunit()
+            # need make filenames with paths system agnostic
+            if '/' in fpath or '\\' in fpath:
+                raw = fpath.replace('\\', '/').split('/')
             else:
-                key = ftype
-        ext_unit_dict[key] = NamData(ftype, fname, filehandle, packages)
+                raw = [fpath]
+            fpath = os.path.join(*raw)
+
+            fname = os.path.join(os.path.dirname(namfilename), fpath)
+            if not os.path.isfile(fname) or not os.path.exists(fname):
+                # change to lower and make comparison (required for linux)
+                dn = os.path.dirname(fname)
+                fls = os.listdir(dn)
+                lownams = [f.lower() for f in fls]
+                bname = os.path.basename(fname)
+                if bname.lower() in lownams:
+                    idx = lownams.index(bname.lower())
+                    fname = os.path.join(dn, fls[idx])
+            # open the file
+            openmode = 'r'
+            if ftype == 'DATA(BINARY)':
+                openmode = 'rb'
+            try:
+                filehandle = open(fname, openmode)
+            except IOError:
+                if verbose:
+                    print('could not set filehandle to {0:s}'.format(fpath))
+                filehandle = None
+            # be sure the second value is an integer
+            try:
+                key = int(key)
+            except ValueError:
+                raise ValueError('line number {}: the unit number (second item) '
+                                 'is not an integer: {}'.format(ln, line))
+            # Trap for the case where unit numbers are specified as zero
+            # In this case, the package must have a variable called
+            # unit number attached to it.  If not, then the key is set
+            # to fname
+            if key == 0:
+                ftype_lower = ftype.lower()
+                if ftype_lower in packages:
+                    key = packages[ftype_lower].reservedunit()
+                else:
+                    key = ftype
+            ext_unit_dict[key] = NamData(ftype, fname, filehandle, packages)
+            ln += 1
     return ext_unit_dict
