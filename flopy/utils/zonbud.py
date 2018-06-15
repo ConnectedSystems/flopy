@@ -387,16 +387,17 @@ class ZoneBudget(object):
 
         valid_timeunit = ['S', 'M', 'H', 'D', 'Y']
 
-        if timeunit.upper() == 'SECONDS':
-            timeunit = 'S'
-        elif timeunit.upper() == 'MINUTES':
-            timeunit = 'M'
-        elif timeunit.upper() == 'HOURS':
-            timeunit = 'H'
-        elif timeunit.upper() == 'DAYS':
-            timeunit = 'D'
-        elif timeunit.upper() == 'YEARS':
-            timeunit = 'Y'
+        timeunit = timeunit.upper()[0]
+        # if timeunit.upper() == 'SECONDS':
+        #     timeunit = 'S'
+        # elif timeunit.upper() == 'MINUTES':
+        #     timeunit = 'M'
+        # elif timeunit.upper() == 'HOURS':
+        #     timeunit = 'H'
+        # elif timeunit.upper() == 'DAYS':
+        #     timeunit = 'D'
+        # elif timeunit.upper() == 'YEARS':
+        #     timeunit = 'Y'
 
         errmsg = 'Specified time units ({}) not recognized. ' \
                  'Please use one of '.format(timeunit)
