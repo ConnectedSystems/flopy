@@ -1,4 +1,5 @@
 import os
+import sys
 import copy
 import numpy as np
 from .binaryfile import CellBudgetFile
@@ -10,6 +11,9 @@ try:
     import pandas as pd
 except:
     pass
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 
 class ZoneBudget(object):
@@ -491,7 +495,7 @@ class ZoneBudget(object):
         self._compute_mass_balance(kstpkper, totim)
 
         return
-    
+
     def _get_internal_flow_record_names(self):
         iflow_recnames = OrderedDict([(0, 'ZONE_0')])
         for z, a in iter(self._zonenamedict.items()):
@@ -581,7 +585,7 @@ class ZoneBudget(object):
                                                'PERCENT_DISCREPANCY', kstpkper,
                                                totim)
         return recordarray
-    
+
     @staticmethod
     def _filter_circular_flow(fz, tz, f):
         e = np.equal(fz, tz)
@@ -628,7 +632,7 @@ class ZoneBudget(object):
             return
         self._update_budget_recordarray(fz, tz, f, kstpkper, totim)
         return
-        
+
     def _update_budget_recordarray(self, rownames, colnames, fluxes, kstpkper=None, totim=None):
         # Update the budget record array with the flux for the specified
         # flow direction (in/out), record name, and column.

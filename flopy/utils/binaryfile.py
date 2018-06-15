@@ -8,11 +8,14 @@ important classes that can be accessed by the user.
 
 """
 from __future__ import print_function
+import sys
 import numpy as np
 import warnings
 from collections import OrderedDict
 from ..utils.datafile import Header, LayerFile
 
+if sys.version_info[0] < 3:
+    range = xrange
 
 class BinaryHeader(Header):
     """
@@ -968,8 +971,8 @@ class CellBudgetFile(object):
         if totim is not None:
             if len(self.times) == 0:
                 errmsg = '''This is an older style budget file that
-                         does not have times in it.  Use the MODFLOW 
-                         compact budget format if you want to work with 
+                         does not have times in it.  Use the MODFLOW
+                         compact budget format if you want to work with
                          times.  Or you may access this file using the
                          kstp and kper arguments or the idx argument.'''
                 raise Exception(errmsg)
@@ -1603,4 +1606,3 @@ class HeadUFile(BinaryLayerFile):
 
     def get_ts(self, idx):
         raise NotImplementedError()
-

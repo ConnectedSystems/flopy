@@ -12,7 +12,9 @@ import subprocess as sp
 import shutil
 import threading
 
-if sys.version_info > (3, 0):
+python_version = sys.version_info
+
+if python_version > (3, 0):
     import queue as Queue
 else:
     import Queue
@@ -22,10 +24,13 @@ import numpy as np
 from flopy import utils
 from .version import __version__
 
-if sys.version_info >= (3, 3):
+if python_version >= (3, 3):
     from shutil import which
 else:
     from distutils.spawn import find_executable as which
+
+if python_version[0] < 3:
+    range = xrange
 
 # Global variables
 iconst = 1  # Multiplier for individual array elements in integer and real arrays read by MODFLOW's U2DREL, U1DREL and U2DINT.
