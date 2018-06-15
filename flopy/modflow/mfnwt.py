@@ -9,6 +9,7 @@ MODFLOW Guide
 """
 
 import sys
+
 from ..pakbase import Package
 
 
@@ -193,15 +194,15 @@ class ModflowNwt(Package):
 
     """
 
-    def __init__(self, model, headtol=1E-2, fluxtol=500, maxiterout=100, \
-                 thickfact=1E-5, linmeth=1, iprnwt=0, ibotav=0, \
-                 options='COMPLEX', Continue=False, \
-                 dbdtheta=0.4, dbdkappa=1.e-5, dbdgamma=0., momfact=0.1, \
-                 backflag=1, maxbackiter=50, backtol=1.1, backreduce=0.70, \
+    def __init__(self, model, headtol=1E-2, fluxtol=500, maxiterout=100,
+                 thickfact=1E-5, linmeth=1, iprnwt=0, ibotav=0,
+                 options='COMPLEX', Continue=False,
+                 dbdtheta=0.4, dbdkappa=1.e-5, dbdgamma=0., momfact=0.1,
+                 backflag=1, maxbackiter=50, backtol=1.1, backreduce=0.70,
                  maxitinner=50, ilumethod=2, levfill=5, stoptol=1.e-10,
-                 msdr=15, \
-                 iacl=2, norder=1, level=5, north=7, iredsys=0, rrctols=0.0, \
-                 idroptol=1, epsrn=1.e-4, hclosexmd=1e-4, mxiterxmd=50, \
+                 msdr=15,
+                 iacl=2, norder=1, level=5, north=7, iredsys=0, rrctols=0.0,
+                 idroptol=1, epsrn=1.e-4, hclosexmd=1e-4, mxiterxmd=50,
                  extension='nwt', unitnumber=None, filenames=None):
 
         if model.version != 'mfnwt':
@@ -374,11 +375,11 @@ class ModflowNwt(Package):
         # dataset 0 -- header
 
         # dataset 0 -- header
-        flines=[line.strip() for line in f.readlines() if not line.strip().startswith('#')]
+        flines = [line.strip() for line in f if not line.strip().startswith('#')]  # f.readlines()
         line = flines.pop(0)
 
         # dataset 1
-        ifrfm = True #model.free_format_input
+        ifrfm = True  # model.free_format_input
 
         vars = (("headtol", float), ("fluxtol", float), ("maxiterout", int),
                 ("thickfact", float), ("linmeth", int), ("iprnwt", int),
@@ -424,7 +425,7 @@ class ModflowNwt(Package):
                 ipos += 1
             # dataset 2
             try:
-                line=flines.pop(0)
+                line = flines.pop(0)
             except:
                 raise Exception('Error: OPTIONS set to "Specified" but only one line in NWT file')
 
@@ -467,11 +468,9 @@ class ModflowNwt(Package):
         # create and return an instance of the nwt class
         return ModflowNwt(model, **kwargs)
 
-
     @staticmethod
     def ftype():
         return 'NWT'
-
 
     @staticmethod
     def defaultunit():

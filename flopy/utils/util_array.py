@@ -8,6 +8,7 @@ util_array module.  Contains the util_2d, util_3d and transient_2d classes.
 from __future__ import division, print_function
 # from future.utils import with_metaclass
 
+import sys
 import os
 import shutil
 import copy
@@ -15,6 +16,9 @@ import numbers
 import numpy as np
 from ..utils.binaryfile import BinaryHeader
 from ..utils.flopy_io import line_parse
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 
 class ArrayFormat(object):
@@ -1631,7 +1635,7 @@ class Util2d(object):
                  how=None, array_free_format=None):
         """
         1d or 2-d array support with minimum of mem footprint.
-        only creates arrays as needed, 
+        only creates arrays as needed,
         otherwise functions with strings or constants
         shape = 1-d or 2-d tuple
         value =  an instance of string,list,np.int,np.float32,np.bool or np.ndarray
@@ -1639,7 +1643,7 @@ class Util2d(object):
         dtype = np.int, or np.float32
         if ext_filename is passed, scalars are written externally as arrays
         model instance bool attribute "array_free_format" used for generating control record
-        model instance string attribute "external_path" 
+        model instance string attribute "external_path"
         used to determine external array writing
         bin controls writing of binary external arrays
         """
@@ -1779,7 +1783,7 @@ class Util2d(object):
         >>> import flopy
         >>> ml = flopy.modflow.Modflow.load('test.nam')
         >>> ml.dis.top.plot()
-        
+
         """
         import flopy.plot.plotutil as pu
 
@@ -2280,7 +2284,7 @@ class Util2d(object):
         """
         load a (possibly wrapped format) array from a file
         (self.__value) and casts to the proper type (self.dtype)
-        made static to support the load functionality 
+        made static to support the load functionality
         this routine now supports fixed format arrays where the numbers
         may touch.
         """
@@ -2534,7 +2538,7 @@ class Util2d(object):
         functionality to load Util2d instance from an existing
         model input file.
         external and internal record types must be fully loaded
-        if you are using fixed format record types,make sure 
+        if you are using fixed format record types,make sure
         ext_unit_dict has been initialized from the NAM file
         """
         if shape == (0, 0):
@@ -2669,7 +2673,7 @@ class Util2d(object):
                         pass
 
 
-                    
+
                 nunit = int(raw[1])
                 if isfloat:
                     cnstnt = np.float(raw[2].lower().replace('d', 'e'))
