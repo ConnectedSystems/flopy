@@ -1,8 +1,12 @@
 import numpy as np
 import collections
 
+import sys
 from ..utils.utils_def import FlopyBinaryData
 from ..utils.reference import SpatialReference
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 class MfGrdFile(FlopyBinaryData):
 
@@ -171,7 +175,3 @@ class MfGrdFile(FlopyBinaryData):
                 return iverts, verts
             except:
                 print('could not return vertices for {}'.format(self.file.name))
-
-
-
-

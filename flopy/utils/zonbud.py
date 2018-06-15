@@ -415,12 +415,12 @@ class ZoneBudget(object):
                 index_cols = ['totim', 'name']
             elif index_key == 'kstpkper':
                 index_cols = ['time_step', 'stress_period', 'name']
-        df = df.set_index(index_cols)#.sort_index(level=0)
+        df = df.set_index(index_cols)  #.sort_index(level=0)
         if zones is not None:
             keep_cols = zones
         else:
             keep_cols = self._zonenamedict.values()
-        return df.loc[:, keep_cols]
+        return df[keep_cols]
 
     def copy(self):
         """

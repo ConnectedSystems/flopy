@@ -127,7 +127,8 @@ class MtListBudget(object):
         for i, lst in self.gw_data.items():
             self.gw_data[i] = lst[:min_len]
         df_gw = pd.DataFrame(self.gw_data)
-        df_gw.loc[:, "totim"] = df_gw.pop("totim_1")
+        # df_gw.loc[:, "totim"] = df_gw.pop("totim_1")
+        df_gw["totim"] = df_gw.pop("totim_1")
 
 
         # if cumulative:
@@ -159,7 +160,8 @@ class MtListBudget(object):
             for i, lst in self.sw_data.items():
                 self.sw_data[i] = lst[:min_len]
             df_sw = pd.DataFrame(self.sw_data)
-            df_sw.loc[:, "totim"] = df_gw.totim.iloc[:min_len].values
+            # df_sw.loc[:, "totim"] = df_gw.totim.iloc[:min_len].values
+            df_sw["totim"] = df_gw.totim.iloc[:min_len].values
 
             # if cumulative:
             #     keep = [c for c in df_sw.columns if "_flx" not in c]
@@ -177,9 +179,10 @@ class MtListBudget(object):
             else:
                 df_sw.index = df_sw.pop("totim")
 
-        for col in df_gw.columns:
-            if "totim" in col:
-                df_gw.pop(col)
+        # remove columns with 'totim' in header
+        no_totim_cols = [c for c in df.columns if 'totim' not in c.lower()]
+        df_gw = df_gw[no_totim_cols]
+
         return df_gw, df_sw
 
     def _diff(self, df):
@@ -200,14 +203,14 @@ class MtListBudget(object):
         out_base.update(in_base)
         out_base = list(out_base)
         out_base.sort()
-        new = {"totim":df.totim}
+        new = {"totim": df.totim}
         for col in out_base:
             if col in out_dict:
-                odata = df.loc[:, out_dict[col]]
+                odata = df[out_dict[col]]
             else:
                 odata = 0.0
             if col in in_dict:
-                idata = df.loc[:, in_dict[col]]
+                idata = df[in_dict[col]]
             else:
                 idata = 0.0
             new[col] = idata - odata

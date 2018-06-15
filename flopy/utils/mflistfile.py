@@ -14,6 +14,9 @@ import numpy as np
 
 from ..utils.utils_def import totim_to_datetime
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class ListBudget(object):
     """
@@ -499,10 +502,12 @@ class ListBudget(object):
                 in_name = name + "_IN"
                 out_name = name + "_OUT"
                 cols_to_drop.extend([in_name, out_name])
-                df_flux.loc[:, name_lower] = df_flux.loc[:, in_name] - df_flux.loc[:, out_name]
+                # df_flux.loc[:, name_lower] = df_flux.loc[:, in_name] - df_flux.loc[:, out_name]
+                df_flux[name_lower] = df_flux[in_name] - df_flux[out_name]
                 # df_flux.pop(in_name)
                 # df_flux.pop(out_name)
-                df_vol.loc[:, name_lower] = df_vol.loc[:, in_name] - df_vol.loc[:, out_name]
+                # df_vol.loc[:, name_lower] = df_vol.loc[:, in_name] - df_vol.loc[:, out_name]
+                df_vol[name_lower] = df_vol[in_name] - df_vol[out_name]
                 # df_vol.pop(in_name)
                 # df_vol.pop(out_name)
             df_flux.drop(columns=cols_to_drop, inplace=True)
