@@ -36,8 +36,6 @@ class check:
         sy : tuple
             Reasonable minimum/maximum specific storage values;
             Default is (3.3e-6, 2e-2) after Anderson, Woessner and Hunt (2015, Table 5.2).
-    thin_cell_threshold : float
-        Minimum cell thickness in model units. Thicknesses below this value will be flagged (default 1.0).
 
     Notes
     -----
@@ -298,7 +296,7 @@ class check:
 
     def _list_spd_check_violations(self, stress_period_data, criteria, col=None,
                                   error_name='', error_type='Warning'):
-        """If criteria contains any true values, return the error_type, package name, k,i,j indicies,
+        """If criteria contains any true values, return the error_type, package name, k,i,j indices,
         values, and description of error for each row in stress_period_data where criteria=True.
         """
         inds_col = ['k', 'i', 'j'] if self.structured else ['node']
@@ -365,7 +363,7 @@ class check:
         Parameters
         ----------
         include_cbd : boolean
-            If True, active is of same dimmension as the thickness array
+            If True, active is of same dimension as the thickness array
             in the DIS module (includes quasi 3-D confining beds). Default False.
 
         Returns
@@ -409,7 +407,7 @@ class check:
 
     def stress_period_data_values(self, stress_period_data, criteria, col=None,
                                   error_name='', error_type='Warning'):
-        """If criteria contains any true values, return the error_type, package name, k,i,j indicies,
+        """If criteria contains any true values, return the error_type, package name, k,i,j indices,
         values, and description of error for each row in stress_period_data where criteria=True.
         """
         # check for valid cell indices
@@ -482,7 +480,7 @@ class check:
             if len(a) > 0:
                 t += '  {} {}s:\n'.format(len(a), etype)
                 if len(a) == 1:
-                    t = t.replace('s', '') #grammer
+                    t = t.replace('s', '') #grammar
                 for e in np.unique(desc):
                     n = np.sum(desc == e)
                     if n > 1:

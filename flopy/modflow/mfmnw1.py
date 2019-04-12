@@ -31,9 +31,10 @@ class ModflowMnw1(Package):
         calculating drawdown
     losstype : string
         head loss type for each well
-    wel1_bynode_qsum : list of lists
+    wel1_bynode_qsum : list of lists or None
         nested list containing file names, unit numbers, and ALLTIME flag for
-        auxilary output, e.g. [['test.ByNode',92,'ALLTIME']]
+        auxiliary output, e.g. [['test.ByNode',92,'ALLTIME']]
+        if None, these optional external filenames and unit numbers are not written out
     itmp : array
         number of wells to be simulated for each stress period (shape : (NPER))
     lay_row_col_qdes_mn_multi : list of arrays
@@ -121,7 +122,7 @@ class ModflowMnw1(Package):
         self.nomoiter = nomoiter        #-integer indicating the number of iterations for which flow in MNW wells is calculated
         self.kspref = kspref            #-alphanumeric key indicating which set of water levels are to be used as reference values for calculating drawdown
         self.losstype = losstype          #-string indicating head loss type for each well
-        self.wel1_bynode_qsum = wel1_bynode_qsum #-nested list containing file names, unit numbers, and ALLTIME flag for auxilary output, e.g. [['test.ByNode',92,'ALLTIME']]
+        self.wel1_bynode_qsum = wel1_bynode_qsum #-nested list containing file names, unit numbers, and ALLTIME flag for auxiliary output, e.g. [['test.ByNode',92,'ALLTIME']]
         #if stress_period_data is not None:
         #    for per, spd in stress_period_data.items():
         #        for n in spd.dtype.names:
@@ -149,7 +150,7 @@ class ModflowMnw1(Package):
     @staticmethod
     def get_empty_stress_period_data(itmp, structured=True,
                                      default_value=0):
-        # get an empty recarray that correponds to dtype
+        # get an empty recarray that corresponds to dtype
         dtype = ModflowMnw1.get_default_dtype(structured=structured)
         return create_empty_recarray(itmp, dtype, default_value=default_value)
 
@@ -276,33 +277,34 @@ class ModflowMnw1(Package):
         #-Section 2 - LOSSTYPE {PLossMNW}
         f.write('%s\n' % (self.losstype))
 
-        #-Section 3a - {FILE:filename WEL1:iunw1}
-        for each in self.wel1_bynode_qsum:
-            if each[0].split('.')[1].lower() == 'wl1':
-                f.write('FILE:%s WEL1:%10i\n' % (each[0],
-                                                      int(each[1])))
-
-        #-Section 3b - {FILE:filename BYNODE:iunby} {ALLTIME}
-        for each in self.wel1_bynode_qsum:
-            if each[0].split('.')[1].lower() == 'bynode':
-                if len(each) == 2:
-                    f.write('FILE:%s BYNODE:%10i\n' % (each[0],
-                                                            int(each[1])))
-                elif len(each) == 3:
-                    f.write('FILE:%s BYNODE:%10i %s\n' % (each[0],
-                                                               int(each[1]),
-                                                               each[2]))
-
-        #-Section 3C - {FILE:filename QSUM:iunqs} {ALLTIME}
-        for each in self.wel1_bynode_qsum:
-            if each[0].split('.')[1].lower() == 'qsum':
-                if len(each) == 2:
-                    f.write('FILE:%s QSUM:%10i\n' % (each[0],
+        if self.wel1_bynode_qsum is not None:
+            #-Section 3a - {FILE:filename WEL1:iunw1}
+            for each in self.wel1_bynode_qsum:
+                if each[0].split('.')[1].lower() == 'wl1':
+                    f.write('FILE:%s WEL1:%-10i\n' % (each[0],
                                                           int(each[1])))
-                elif len(each) == 3:
-                    f.write('FILE:%s QSUM:%10i %s\n' % (each[0],
-                                                             int(each[1]),
-                                                             each[2]))
+
+            #-Section 3b - {FILE:filename BYNODE:iunby} {ALLTIME}
+            for each in self.wel1_bynode_qsum:
+                if each[0].split('.')[1].lower() == 'bynode':
+                    if len(each) == 2:
+                        f.write('FILE:%s BYNODE:%-10i\n' % (each[0],
+                                                                int(each[1])))
+                    elif len(each) == 3:
+                        f.write('FILE:%s BYNODE:%-10i %s\n' % (each[0],
+                                                                   int(each[1]),
+                                                                   each[2]))
+
+            #-Section 3C - {FILE:filename QSUM:iunqs} {ALLTIME}
+            for each in self.wel1_bynode_qsum:
+                if each[0].split('.')[1].lower() == 'qsum':
+                    if len(each) == 2:
+                        f.write('FILE:%s QSUM:%-10i\n' % (each[0],
+                                                              int(each[1])))
+                    elif len(each) == 3:
+                        f.write('FILE:%s QSUM:%-10i %s\n' % (each[0],
+                                                                 int(each[1]),
+                                                                 each[2]))
 
         spd = self.stress_period_data.drop('mnw_no')
         # force write_transient to keep the list arrays internal because MNW1 doesn't allow open/close
@@ -360,9 +362,8 @@ def _parse_3(line, txt):
 
     def getitem(line, txt):
         return line.pop(0).replace(txt+':', '').strip()
-
     line = line_parse(line.lower())
-    items = [getitem(line, 'file:'),
+    items = [getitem(line, 'file'),
              getitem(line, txt)]
     if 'alltime' in ' '.join(line):
         items.append('alltime')

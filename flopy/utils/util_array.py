@@ -11,11 +11,11 @@ from __future__ import division, print_function
 import os
 import shutil
 import copy
-import numbers
 import numpy as np
+from warnings import warn
 from ..utils.binaryfile import BinaryHeader
 from ..utils.flopy_io import line_parse
-
+from ..datbase import DataType, DataInterface
 
 class ArrayFormat(object):
     """
@@ -25,7 +25,6 @@ class ArrayFormat(object):
     Parameters
     ----------
     u2d : Util2d instance
-
     python : str (optional)
         python-style output format descriptor e.g. {0:15.6e}
     fortran : str (optional)
@@ -56,7 +55,7 @@ class ArrayFormat(object):
 
     Methods
     -------
-    get_default_numpy_fmt : (dtype : [np.int,np.float32])
+    get_default_numpy_fmt : (dtype : [np.int32, np.float32])
         a static method to get a default numpy dtype - used for loading
     decode_fortran_descriptor : (fd : str)
         a static method to decode fortran descriptors into npl, format,
@@ -73,7 +72,7 @@ class ArrayFormat(object):
 
     """
 
-    def __init__(self, u2d, python=None, fortran=None,array_free_format=None):
+    def __init__(self, u2d, python=None, fortran=None, array_free_format=None):
 
         assert isinstance(u2d, Util2d), "ArrayFormat only supports Util2d," + \
                                         "not {0}".format(type(u2d))
@@ -121,7 +120,7 @@ class ArrayFormat(object):
         return bool(self._freeformat_model)
 
     def _set_defaults(self):
-        if self.dtype in [int, np.int, np.int32]:
+        if self.dtype == np.int32:
             self._npl = self._npl_full
             self._format = self.default_int_format
             self._width = self.default_int_width
@@ -144,14 +143,14 @@ class ArrayFormat(object):
 
     @staticmethod
     def get_default_numpy_fmt(dtype):
-        if dtype == np.int:
+        if dtype == np.int32:
             return "%10d"
         elif dtype == np.float32:
             return "%15.6E"
         else:
             raise Exception(
                 "ArrayFormat.get_default_numpy_fmt(): unrecognized " + \
-                "dtype, must be np.int or np.float32")
+                "dtype, must be np.int32 or np.float32")
 
     @classmethod
     def integer(cls):
@@ -199,7 +198,7 @@ class ArrayFormat(object):
             value = value.upper()
             assert value.upper() in self._fmts
             if value == 'I':
-                assert self.dtype in [int, np.int, np.int32]
+                assert self.dtype == np.int32, self.dtype
                 self._format = value
                 self._decimal = None
             else:
@@ -215,14 +214,14 @@ class ArrayFormat(object):
             if self.dtype == np.float32 and width < self.decimal:
                 raise Exception("width cannot be less than decimal")
             elif self.dtype == np.float32 and \
-                            width < self.default_float_width:
+                    width < self.default_float_width:
                 print("ArrayFormat warning:setting width less " +
                       "than default of {0}".format(self.default_float_width))
                 self._width = width
         elif key == "decimal":
-            if self.dtype in [int, np.int, np.int32]:
+            if self.dtype == np.int32:
                 raise Exception("cannot set decimal for integer dtypes")
-            else:
+            elif self.dtype == np.float32:
                 value = int(value)
                 if value < self.default_float_decimal:
                     print("ArrayFormat warning: setting decimal " +
@@ -233,6 +232,8 @@ class ArrayFormat(object):
                           " less than current value of " +
                           "{0}".format(self.default_float_decimal))
                 self._decimal = int(value)
+            else:
+                raise TypeError(self.dtype)
 
         elif key == "entries" \
                 or key == "entires_per_line" \
@@ -407,14 +408,16 @@ def read1d(f, a):
     case lpf 1d arrays (chani, layvka, etc) extend over more than one line
 
     """
+    if len(a.shape) != 1:
+        raise ValueError('read1d: expected 1 dimension, found shape {0}'
+                         .format(a.shape))
     values = []
-    while True:
+    while len(values) < a.shape[0]:
         line = f.readline()
-        t = line_parse(line)
-        values = values + t
-        if len(values) >= a.shape[0]:
-            break
-    a[:] = np.array(values[0:a.shape[0]], dtype=a.dtype)
+        if len(line) == 0:
+            raise ValueError('read1d: no data found')
+        values += line_parse(line)
+    a[:] = np.fromiter(values, dtype=a.dtype, count=a.shape[0])
     return a
 
 
@@ -428,7 +431,7 @@ def new_u2d(old_util2d, value):
     return new_util2d
 
 
-class Util3d(object):
+class Util3d(DataInterface):
     """
     Util3d class for handling 3-D model arrays.  just a thin wrapper around
         Util2d
@@ -440,7 +443,7 @@ class Util3d(object):
         this package will be added.
     shape : length 3 tuple
         shape of the 3-D array, typically (nlay,nrow,ncol)
-    dtype : [np.int,np.float32,np.bool]
+    dtype : [np.int32, np.float32, np.bool]
         the type of the data
     value : variable
         the data to be assigned to the 3-D array.
@@ -500,9 +503,9 @@ class Util3d(object):
         self.array_free_format = array_free_format
         if isinstance(value, Util3d):
             for attr in value.__dict__.items():
-                setattr(self,attr[0], attr[1])
-            self.model = model
-            self.array_free_format=array_free_format
+                setattr(self, attr[0], attr[1])
+            self._model = model
+            self.array_free_format = array_free_format
             for i, u2d in enumerate(self.util_2ds):
                 self.util_2ds[i] = Util2d(model, u2d.shape, u2d.dtype,
                                           u2d._array, name=u2d.name,
@@ -513,29 +516,37 @@ class Util3d(object):
                                           array_free_format=array_free_format)
 
             return
-        assert len(shape) == 3, 'Util3d:shape attribute must be length 3'
-        self.model = model
+        if len(shape) != 3:
+            raise ValueError(
+                'Util3d: expected 3 dimensions, found shape {0}'.format(shape))
+        self._model = model
         self.shape = shape
-        self.dtype = dtype
+        self._dtype = dtype
         self.__value = value
+        isnamespecified = False
         if isinstance(name, list):
-            self.name = name
+            self._name = name
+            isnamespecified = True
+            isnamespecified = True
+            isnamespecified = True
         else:
             t = []
             for k in range(shape[0]):
                 t.append(name)
-            self.name = t
+            self._name = t
         self.name_base = []
         for k in range(shape[0]):
-            if 'Layer' not in self.name[k]:
-                self.name_base.append(self.name[k] + ' Layer ')
-            else:
+            if isnamespecified:
                 self.name_base.append(self.name[k])
+            else:
+                if 'Layer' not in self.name[k]:
+                    self.name_base.append(self.name[k] + ' Layer ')
+                else:
+                    self.name_base.append(self.name[k])
         self.fmtin = fmtin
         self.cnstnt = cnstnt
         self.iprn = iprn
         self.locat = locat
-
 
         self.ext_filename_base = []
         if model.external_path is not None:
@@ -568,7 +579,7 @@ class Util3d(object):
             for u2d in self.util_2ds:
                 u2d.format = ArrayFormat(u2d, fortran=value,
                                          array_free_format=self.array_free_format)
-            super(Util3d,self).__setattr__("fmtin",value)
+            super(Util3d, self).__setattr__("fmtin", value)
         elif hasattr(self, "util_2ds") and key == "how":
             for u2d in self.util_2ds:
                 u2d.how = value
@@ -576,9 +587,29 @@ class Util3d(object):
             # set the attribute for u3d
             super(Util3d, self).__setattr__(key, value)
 
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def model(self):
+        return self._model
+
+    @property
+    def data_type(self):
+        return DataType.array3d
+
+    @property
+    def plotable(self):
+        return True
+
     def export(self, f, **kwargs):
         from flopy import export
-        return export.utils.util3d_helper(f, self, **kwargs)
+        return export.utils.array3d_export(f, self, **kwargs)
 
     def to_shapefile(self, filename):
         """
@@ -606,18 +637,18 @@ class Util3d(object):
         >>> ml = flopy.modflow.Modflow.load('test.nam')
         >>> ml.lpf.hk.to_shapefile('test_hk.shp')
         """
-        import warnings
-        warnings.warn(
-            "Deprecation warning: to_shapefile() is deprecated. use .export()")
+        warn(
+            "Deprecation warning: to_shapefile() is deprecated. use .export()",
+            DeprecationWarning)
 
         # from flopy.utils.flopy_io import write_grid_shapefile, shape_attr_name
         #
         # array_dict = {}
-        # for ilay in range(self.model.nlay):
+        # for ilay in range(self._model.nlay):
         #     u2d = self[ilay]
         #     name = '{}_{:03d}'.format(shape_attr_name(u2d.name), ilay + 1)
         #     array_dict[name] = u2d.array
-        # write_grid_shapefile(filename, self.model.dis.sr,
+        # write_grid_shapefile(filename, self._model.dis.sr,
         #                      array_dict)
 
         self.export(filename)
@@ -685,34 +716,15 @@ class Util3d(object):
         >>> ml.lpf.hk.plot()
 
         """
-        import flopy.plot.plotutil as pu
+        from flopy.plot import PlotUtilities
 
-        if file_extension is not None:
-            fext = file_extension
-        else:
-            fext = 'png'
-
-        names = ['{} layer {}'.format(self.name[k], k + 1) for k in
-                 range(self.shape[0])]
-
-        filenames = None
-        if filename_base is not None:
-            if mflay is not None:
-                i0 = int(mflay)
-                if i0 + 1 >= self.shape[0]:
-                    i0 = self.shape[0] - 1
-                i1 = i0 + 1
-            else:
-                i0 = 0
-                i1 = self.shape[0]
-            # build filenames
-            filenames = ['{}_{}_Layer{}.{}'.format(filename_base, self.name[k],
-                                                   k + 1, fext) for k in
-                         range(i0, i1)]
-
-        return pu._plot_array_helper(self.array, self.model,
-                                     names=names, filenames=filenames,
-                                     mflay=mflay, fignum=fignum, **kwargs)
+        axes = PlotUtilities._plot_util3d_helper(self,
+                                                 filename_base=filename_base,
+                                                 file_extension=file_extension,
+                                                 mflay=mflay,
+                                                 fignum=fignum,
+                                                 **kwargs)
+        return axes
 
     def __getitem__(self, k):
         if (isinstance(k, int) or
@@ -745,14 +757,14 @@ class Util3d(object):
         nlay, nrow, ncol = self.shape
         if nrow is not None:
             # typical 3D case
-            a = np.empty((self.shape), dtype=self.dtype)
+            a = np.empty((self.shape), dtype=self._dtype)
             # for i,u2d in self.uds:
             for i, u2d in enumerate(self.util_2ds):
                 a[i] = u2d.array
         else:
             # unstructured case
             nodes = ncol.sum()
-            a = np.empty((nodes), dtype=self.dtype)
+            a = np.empty((nodes), dtype=self._dtype)
             istart = 0
             for i, u2d in enumerate(self.util_2ds):
                 istop = istart + ncol[i]
@@ -784,19 +796,19 @@ class Util3d(object):
                                          "{0}.ref".format(i + 1)
                     # reset the model instance in cases these Util2d's
                     # came from another model instance
-                    item.model = self.model
+                    item.model = self._model
                     u2ds.append(item)
                 else:
                     name = self.name_base[i] + str(i + 1)
                     ext_filename = None
-                    if self.model.external_path is not None:
+                    if self._model.external_path is not None:
                         ext_filename = self.ext_filename_base[i] + str(i + 1) + \
                                        '.ref'
-                    shp = self.shape[1:]
-                    if shp[0] is None:
+                    shape = self.shape[1:]
+                    if shape[0] is None:
                         # allow for unstructured so that ncol changes by layer
-                        shp = (1, self.shape[2][i])
-                    u2d = Util2d(self.model, shp, self.dtype, item,
+                        shape = (self.shape[2][i],)
+                    u2d = Util2d(self.model, shape, self.dtype, item,
                                  fmtin=self.fmtin, name=name,
                                  ext_filename=ext_filename,
                                  locat=self.locat,
@@ -817,10 +829,10 @@ class Util3d(object):
                 a = np.atleast_2d(a)
                 ext_filename = None
                 name = self.name_base[i] + str(i + 1)
-                if self.model.external_path is not None:
+                if self._model.external_path is not None:
                     ext_filename = self.ext_filename_base[i] + str(
                         i + 1) + '.ref'
-                u2d = Util2d(self.model, self.shape[1:], self.dtype, a,
+                u2d = Util2d(self._model, self.shape[1:], self._dtype, a,
                              fmtin=self.fmtin, name=name,
                              ext_filename=ext_filename,
                              locat=self.locat,
@@ -835,7 +847,9 @@ class Util3d(object):
     @staticmethod
     def load(f_handle, model, shape, dtype, name, ext_unit_dict=None,
              array_format=None):
-        assert len(shape) == 3, 'Util3d:shape attribute must be length 3'
+        if len(shape) != 3:
+            raise ValueError(
+                'Util3d: expected 3 dimensions, found shape {0}'.format(shape))
         nlay, nrow, ncol = shape
         u2ds = []
         for k in range(nlay):
@@ -858,20 +872,20 @@ class Util3d(object):
             new_u2ds = []
             for u2d in self.util_2ds:
                 new_u2ds.append(u2d * other)
-            return Util3d(self.model, self.shape, self.dtype, new_u2ds,
-                          self.name, self.fmtin, self.cnstnt, self.iprn,
+            return Util3d(self._model, self.shape, self._dtype, new_u2ds,
+                          self._name, self.fmtin, self.cnstnt, self.iprn,
                           self.locat)
         elif isinstance(other, list):
             assert len(other) == self.shape[0]
             new_u2ds = []
             for u2d, item in zip(self.util_2ds, other):
                 new_u2ds.append(u2d * item)
-            return Util3d(self.model, self.shape, self.dtype, new_u2ds,
-                          self.name, self.fmtin, self.cnstnt, self.iprn,
+            return Util3d(self._model, self.shape, self._dtype, new_u2ds,
+                          self._name, self.fmtin, self.cnstnt, self.iprn,
                           self.locat)
 
 
-class Transient3d(object):
+class Transient3d(DataInterface):
     """
     Transient3d class for handling time-dependent 3-D model arrays.
     just a thin wrapper around Util3d
@@ -883,7 +897,7 @@ class Transient3d(object):
         this package will be added.
     shape : length 3 tuple
         shape of the 3-D transient arrays, typically (nlay,nrow,ncol)
-    dtype : [np.int,np.float32,np.bool]
+    dtype : [np.int32, np.float32, np.bool]
         the type of the data
     value : variable
         the data to be assigned to the 3-D arrays. Typically a dict
@@ -946,22 +960,23 @@ class Transient3d(object):
         if isinstance(value, Transient3d):
             for attr in value.__dict__.items():
                 setattr(self, attr[0], attr[1])
-            self.model = model
+            self._model = model
             return
 
-        self.model = model
-        assert len(shape) == 3, "Transient3d error: shape arg must be " + \
-                                "length three (nlay, nrow, ncol), not " + \
-                                str(shape)
+        self._model = model
+        if len(shape) != 3:
+            raise ValueError(
+                'Transient3d: expected 3 dimensions (nlay, nrow, ncol), found '
+                'shape {0}'.format(shape))
         self.shape = shape
-        self.dtype = dtype
+        self._dtype = dtype
         self.__value = value
         self.name_base = name
         self.fmtin = fmtin
-        self.cnstst = cnstnt
+        self.cnstnt = cnstnt
         self.iprn = iprn
         self.locat = locat
-        self.array_free_format=array_free_format
+        self.array_free_format = array_free_format
         self.transient_3ds = self.build_transient_sequence()
         return
 
@@ -969,10 +984,30 @@ class Transient3d(object):
         # set the attribute for u3d, even for cnstnt
         super(Transient3d, self).__setattr__(key, value)
 
+    @property
+    def model(self):
+        return self._model
+
+    @property
+    def name(self):
+        return self.name_base
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def data_type(self):
+        return DataType.transient3d
+
+    @property
+    def plotable(self):
+        return False
+
     def get_zero_3d(self, kper):
         name = self.name_base + str(kper + 1) + '(filled zero)'
-        return Util3d(self.model, self.shape,
-                      self.dtype, 0.0, name=name,
+        return Util3d(self._model, self.shape,
+                      self._dtype, 0.0, name=name,
                       array_free_format=self.array_free_format)
 
     def __getitem__(self, kper):
@@ -994,8 +1029,8 @@ class Transient3d(object):
         except Exception as e:
             raise Exception("Transient3d.__setitem__() error: " + \
                             "'key'could not be cast to int:{0}".format(str(e)))
-        nper = self.model.nper
-        if key > self.model.nper or key < 0:
+        nper = self._model.nper
+        if key > self._model.nper or key < 0:
             raise Exception("Transient3d.__setitem__() error: " + \
                             "key {0} not in nper range {1}:{2}".format(key, 0,
                                                                        nper))
@@ -1004,9 +1039,9 @@ class Transient3d(object):
 
     @property
     def array(self):
-        arr = np.zeros((self.model.nper, self.shape[0], self.shape[1],
-                        self.shape[2]), dtype=self.dtype)
-        for kper in range(self.model.nper):
+        arr = np.zeros((self._model.nper, self.shape[0], self.shape[1],
+                        self.shape[2]), dtype=self._dtype)
+        for kper in range(self._model.nper):
             u3d = self[kper]
             for k in range(self.shape[0]):
                 arr[kper, k, :, :] = u3d[k].array
@@ -1083,15 +1118,15 @@ class Transient3d(object):
         parse an argument into a Util3d instance
         """
         name = '{}_period{}'.format(self.name_base, kper + 1)
-        u3d = Util3d(self.model, self.shape, self.dtype, arg,
+        u3d = Util3d(self._model, self.shape, self._dtype, arg,
                      fmtin=self.fmtin, name=name,
-#                     ext_filename=ext_filename,
+                     #                     ext_filename=ext_filename,
                      locat=self.locat,
                      array_free_format=self.array_free_format)
         return u3d
 
 
-class Transient2d(object):
+class Transient2d(DataInterface):
     """
     Transient2d class for handling time-dependent 2-D model arrays.
     just a thin wrapper around Util2d
@@ -1103,7 +1138,7 @@ class Transient2d(object):
         this package will be added.
     shape : length 2 tuple
         shape of the 2-D transient arrays, typically (nrow,ncol)
-    dtype : [np.int,np.float32,np.bool]
+    dtype : [np.int32, np.float32, np.bool]
         the type of the data
     value : variable
         the data to be assigned to the 2-D arrays. Typically a dict
@@ -1161,7 +1196,7 @@ class Transient2d(object):
 
     def __init__(self, model, shape, dtype, value, name, fmtin=None,
                  cnstnt=1.0, iprn=-1, ext_filename=None, locat=None,
-                 bin=False,array_free_format=None):
+                 bin=False, array_free_format=None):
 
         if isinstance(value, Transient2d):
             for attr in value.__dict__.items():
@@ -1175,23 +1210,24 @@ class Transient2d(object):
                                                   ext_filename=u2d.filename,
                                                   array_free_format=array_free_format)
 
-            self.model = model
+            self._model = model
             return
 
-        self.model = model
-        assert len(shape) == 2, "Transient2d error: shape arg must be " + \
-                                "length two (nrow, ncol), not " + \
-                                str(shape)
+        self._model = model
+        if len(shape) != 2:
+            raise ValueError(
+                'Transient2d: expected 2 dimensions (nrow, ncol), found '
+                'shape {0}'.format(shape))
         if shape[0] is None:
             # allow for unstructured so that ncol changes by layer
             shape = (1, shape[1][0])
 
         self.shape = shape
-        self.dtype = dtype
+        self._dtype = dtype
         self.__value = value
         self.name_base = name
         self.fmtin = fmtin
-        self.cnstst = cnstnt
+        self.cnstnt = cnstnt
         self.iprn = iprn
         self.locat = locat
         self.array_free_format = array_free_format
@@ -1203,6 +1239,26 @@ class Transient2d(object):
             self.ext_filename_base = self.name_base.replace(' ', '_')
         self.transient_2ds = self.build_transient_sequence()
         return
+
+    @property
+    def name(self):
+        return self.name_base
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def model(self):
+        return self._model
+
+    @property
+    def data_type(self):
+        return DataType.transient2d
+
+    @property
+    def plotable(self):
+        return True
 
     @staticmethod
     def masked4d_array_to_kper_dict(m4d):
@@ -1269,8 +1325,8 @@ class Transient2d(object):
 
     def get_zero_2d(self, kper):
         name = self.name_base + str(kper + 1) + '(filled zero)'
-        return Util2d(self.model, self.shape,
-                      self.dtype, 0.0, name=name,
+        return Util2d(self._model, self.shape,
+                      self._dtype, 0.0, name=name,
                       array_free_format=self.array_free_format)
 
     def to_shapefile(self, filename):
@@ -1299,21 +1355,22 @@ class Transient2d(object):
         >>> ml = flopy.modflow.Modflow.load('test.nam')
         >>> ml.rch.rech.as_shapefile('test_rech.shp')
         """
-        import warnings
-        warnings.warn(
-            "Deprecation warning: to_shapefile() is deprecated. use .export()")
+        warn(
+            "Deprecation warning: to_shapefile() is deprecated. use .export()",
+            DeprecationWarning)
 
         # from flopy.utils.flopy_io import write_grid_shapefile, shape_attr_name
         #
         # array_dict = {}
-        # for kper in range(self.model.nper):
+        # for kper in range(self._model.nper):
         #     u2d = self[kper]
         #     name = '{}_{:03d}'.format(shape_attr_name(u2d.name), kper + 1)
         #     array_dict[name] = u2d.array
-        # write_grid_shapefile(filename, self.model.dis.sr, array_dict)
+        # write_grid_shapefile(filename, self._model.dis.sr, array_dict)
         self.export(filename)
 
-    def plot(self, filename_base=None, file_extension=None, **kwargs):
+    def plot(self, filename_base=None, file_extension=None, kper=0,
+             fignum=None, **kwargs):
         """
         Plot transient 2-D model input data
 
@@ -1326,6 +1383,12 @@ class Transient2d(object):
         file_extension : str
             Valid matplotlib.pyplot file extension for savefig(). Only used
             if filename_base is not None. (default is 'png')
+        kper : int or str
+            model stress period. if 'all' is provided, all stress periods
+            will be plotted
+        fignum: list or int
+            Figure numbers for plot title
+
         **kwargs : dict
             axes : list of matplotlib.pyplot.axis
                 List of matplotlib.pyplot.axis that will be used to plot
@@ -1376,58 +1439,15 @@ class Transient2d(object):
         >>> ml.rch.rech.plot()
 
         """
-        import flopy.plot.plotutil as pu
+        from flopy.plot import PlotUtilities
 
-        if file_extension is not None:
-            fext = file_extension
-        else:
-            fext = 'png'
+        axes = PlotUtilities._plot_transient2d_helper(self,
+                                                      filename_base=filename_base,
+                                                      file_extension=file_extension,
+                                                      kper=kper,
+                                                      fignum=fignum,
+                                                      **kwargs)
 
-        if 'kper' in kwargs:
-            kk = kwargs['kper']
-            kwargs.pop('kper')
-            try:
-                kk = kk.lower()
-                if kk == 'all':
-                    k0 = 0
-                    k1 = self.model.nper
-                else:
-                    k0 = 0
-                    k1 = 1
-            except:
-                k0 = int(kk)
-                k1 = k0 + 1
-                # if kwargs['kper'] == 'all':
-                #     kwargs.pop('kper')
-                #     k0 = 0
-                #     k1 = self.model.nper
-                # else:
-                #     k0 = int(kwargs.pop('kper'))
-                #     k1 = k0 + 1
-        else:
-            k0 = 0
-            k1 = 1
-
-        if 'fignum' in kwargs:
-            fignum = kwargs.pop('fignum')
-        else:
-            fignum = list(range(k0, k1))
-
-        if 'mflay' in kwargs:
-            kwargs.pop('mflay')
-
-        axes = []
-        for idx, kper in enumerate(range(k0, k1)):
-            title = '{} stress period {:d}'. \
-                format(self.name_base.replace('_', '').upper(),
-                       kper + 1)
-            if filename_base is not None:
-                filename = filename_base + '_{:05d}.{}'.format(kper + 1, fext)
-            else:
-                filename = None
-            axes.append(pu._plot_array_helper(self[kper].array, self.model,
-                                              names=title, filenames=filename,
-                                              fignum=fignum[idx], **kwargs))
         return axes
 
     def __getitem__(self, kper):
@@ -1449,8 +1469,8 @@ class Transient2d(object):
         except Exception as e:
             raise Exception("Transient2d.__setitem__() error: " + \
                             "'key'could not be cast to int:{0}".format(str(e)))
-        nper = self.model.nper
-        if key > self.model.nper or key < 0:
+        nper = self._model.nper
+        if key > self._model.nper or key < 0:
             raise Exception("Transient2d.__setitem__() error: " + \
                             "key {0} not in nper range {1}:{2}".format(key, 0,
                                                                        nper))
@@ -1459,20 +1479,20 @@ class Transient2d(object):
 
     @property
     def array(self):
-        arr = np.zeros((self.model.nper, 1, self.shape[0], self.shape[1]),
-                       dtype=self.dtype)
-        for kper in range(self.model.nper):
+        arr = np.zeros((self._model.nper, 1, self.shape[0], self.shape[1]),
+                       dtype=self._dtype)
+        for kper in range(self._model.nper):
             u2d = self[kper]
             arr[kper, 0, :, :] = u2d.array
         return arr
 
     def export(self, f, **kwargs):
         from flopy import export
-        return export.utils.transient2d_helper(f, self, **kwargs)
+        return export.utils.transient2d_export(f, self, **kwargs)
 
     def get_kper_entry(self, kper):
         """
-        get the file entry info for a given kper
+        Get the file entry info for a given kper
         returns (itmp,file entry string from Util2d)
         """
         if kper in self.transient_2ds:
@@ -1536,7 +1556,7 @@ class Transient2d(object):
         ext_filename = None
         name = self.name_base + str(kper + 1)
         ext_filename = self.ext_filename_base + str(kper) + '.ref'
-        u2d = Util2d(self.model, self.shape, self.dtype, arg,
+        u2d = Util2d(self._model, self.shape, self._dtype, arg,
                      fmtin=self.fmtin, name=name,
                      ext_filename=ext_filename,
                      locat=self.locat,
@@ -1544,21 +1564,21 @@ class Transient2d(object):
         return u2d
 
 
-class Util2d(object):
+class Util2d(DataInterface):
     """
-    Util2d class for handling 2-D model arrays
+    Util2d class for handling 1- or 2-D model arrays
 
     Parameters
     ----------
     model : model object
         The model object (of type :class:`flopy.modflow.mf.Modflow`) to which
         this package will be added.
-    shape : lenght 3 tuple
-        shape of the 3-D array
-    dtype : [np.int,np.float32,np.bool]
+    shape : tuple
+        Shape of the 1- or 2-D array
+    dtype : [np.int32, np.float32, np.bool]
         the type of the data
     value : variable
-        the data to be assigned to the 2-D array.
+        the data to be assigned to the 1- or 2-D array.
         can be a scalar, list, ndarray, or filename
     name : string
         name of the property (optional). (the default is None
@@ -1629,26 +1649,46 @@ class Util2d(object):
     def __init__(self, model, shape, dtype, value, name, fmtin=None,
                  cnstnt=1.0, iprn=-1, ext_filename=None, locat=None, bin=False,
                  how=None, array_free_format=None):
-        """
-        1d or 2-d array support with minimum of mem footprint.
-        only creates arrays as needed, 
-        otherwise functions with strings or constants
-        shape = 1-d or 2-d tuple
-        value =  an instance of string,list,np.int,np.float32,np.bool or np.ndarray
-        vtype = str,np.int,np.float32,np.bool, or np.ndarray
-        dtype = np.int, or np.float32
-        if ext_filename is passed, scalars are written externally as arrays
-        model instance bool attribute "array_free_format" used for generating control record
-        model instance string attribute "external_path" 
-        used to determine external array writing
-        bin controls writing of binary external arrays
+        """Create 1- or 2-d array
+
+        Parameters
+        ----------
+        model : model object
+        shape : tuple
+            Dimensions of 1- or 2-D array, e.g. (nrow, ncol)
+        dtype : int or np.float32
+        value : str, list, np.int32, np.float32, bool or np.ndarray
+        name : str
+            Array name or description
+        fmtin : str, optional
+        cnstnt : np.int32 or np.float32, optional
+            Array constant; default 1.0
+        iprn : int, optional
+            Modflow printing option; default -1
+        ext_filename : str, optional
+            Name of external files name where arrays are written
+        locat : int, optional
+        bin : bool, optional
+            If True, writes unformatted files; default False writes formatted
+        how : str, optional
+            One of "constant", "internal", "external", or "openclose"
+        array_free_format : bool, optional
+            used for generating control record
+
+        Notes
+        -----
+        Support with minimum of mem footprint, only creates arrays as needed,
+        otherwise functions with strings or constants.
+
+        Model instance string attribute "external_path" used to determine
+        external array writing
         """
         if isinstance(value, Util2d):
             for attr in value.__dict__.items():
                 setattr(self, attr[0], attr[1])
-            self.model = model
-            self.name = name
-            self._ext_filename = self.name.replace(' ', '_') + ".ref"
+            self._model = model
+            self._name = name
+            self._ext_filename = self._name.replace(' ', '_') + ".ref"
             if ext_filename is not None:
                 self.ext_filename = ext_filename.lower()
             else:
@@ -1658,41 +1698,45 @@ class Util2d(object):
             return
 
         # some defense
-        if dtype not in [np.int, np.int32, np.float32, np.bool]:
-            raise Exception('Util2d:unsupported dtype: ' + str(dtype))
+        if dtype != np.int32 and np.issubdtype(dtype, np.integer):
+            # Modflow only uses 4-byte integers
+            dtype = np.dtype(dtype)
+            if np.dtype(int).itemsize != 4:
+                # show warning for platforms where int is not 4-bytes
+                warn('Util2d: setting integer dtype from {0} to int32'
+                     .format(dtype))
+            dtype = np.int32
+        if dtype not in [np.int32, np.float32, np.bool]:
+            raise TypeError('Util2d:unsupported dtype: ' + str(dtype))
 
         if name is not None:
             name = name.lower()
         if ext_filename is not None:
             ext_filename = ext_filename.lower()
 
-        self.model = model
-        for s in shape:
-            assert isinstance(s,
-                              numbers.Integral), "all shape elements must be integers, " + \
-                                                 "not {0}:{1}".format(type(s),
-                                                                      str(s))
+        self._model = model
+        if len(shape) not in (1, 2):
+            raise ValueError(
+                'Util2d: shape must describe 1- or 2-dimensions, '
+                'e.g. (nrow, ncol)')
+        if min(shape) < 1:
+            raise ValueError('Util2d: each shape dimension must be at least 1')
         self.shape = shape
-        self.dtype = dtype
-        self.name = name
+        self._dtype = dtype
+        self._name = name
         self.locat = locat
         self.parse_value(value)
         if self.vtype == str:
             fmtin = "(FREE)"
         self.__value_built = None
-        #if isinstance(dtype, np.float) or isinstance(dtype, np.float32):
-        #if dtype in [float,np.float,np.float32]:
-        #    self.cnstnt = float(cnstnt)
-        #else:
-        #    self.cnstnt = int(cnstnt)
         self.cnstnt = dtype(cnstnt)
 
         self.iprn = iprn
         self._format = ArrayFormat(self, fortran=fmtin,
                                    array_free_format=array_free_format)
-        self._format.binary = bool(bin)
+        self._format._isbinary = bool(bin)
         self.ext_filename = ext_filename
-        self._ext_filename = self.name.replace(' ', '_') + ".ref"
+        self._ext_filename = self._name.replace(' ', '_') + ".ref"
 
         self._acceptable_hows = ["constant", "internal", "external",
                                  "openclose"]
@@ -1704,13 +1748,33 @@ class Util2d(object):
         else:
             self._decide_how()
 
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def model(self):
+        return self._model
+
+    @property
+    def data_type(self):
+        return DataType.array2d
+
+    @property
+    def plotable(self):
+        return True
+
     def _decide_how(self):
         # if a constant was passed in
-        if self.vtype in [np.int, np.float32]:
+        if self.vtype in [np.int32, np.float32]:
             self._how = "constant"
         # if a filename was passed in or external path was set
-        elif self.model.external_path is not None or \
-                        self.vtype == str:
+        elif self._model.external_path is not None or \
+                self.vtype == str:
             if self.format.array_free_format:
                 self._how = "openclose"
             else:
@@ -1727,7 +1791,7 @@ class Util2d(object):
         ----------
         title : str
             Plot title. If a plot title is not provide one will be
-            created based on data name (self.name). (default is None)
+            created based on data name (self._name). (default is None)
         filename_base : str
             Base file name that will be used to automatically generate file
             names for output image files. Plots will be exported as image
@@ -1781,27 +1845,17 @@ class Util2d(object):
         >>> ml.dis.top.plot()
         
         """
-        import flopy.plot.plotutil as pu
+        from flopy.plot import PlotUtilities
 
-        if title is None:
-            title = self.name
-
-        if file_extension is not None:
-            fext = file_extension
-        else:
-            fext = 'png'
-
-        filename = None
-        if filename_base is not None:
-            filename = '{}_{}.{}'.format(filename_base, self.name, fext)
-
-        return pu._plot_array_helper(self.array, self.model,
-                                     names=title, filenames=filename,
-                                     fignum=fignum, **kwargs)
+        axes = PlotUtilities._plot_util2d_helper(self, title=title,
+                                                 filename_base=filename_base,
+                                                 file_extension=file_extension,
+                                                 fignum=fignum, **kwargs)
+        return axes
 
     def export(self, f, **kwargs):
         from flopy import export
-        return export.utils.util2d_helper(f, self, **kwargs)
+        return export.utils.array2d_export(f, self, **kwargs)
 
     def to_shapefile(self, filename):
         """
@@ -1829,12 +1883,13 @@ class Util2d(object):
         >>> ml.dis.top.as_shapefile('test_top.shp')
         """
 
-        import warnings
-        warnings.warn(
-            "Deprecation warning: to_shapefile() is deprecated. use .export()")
+        warn(
+            "Deprecation warning: to_shapefile() is deprecated. use .export()",
+            DeprecationWarning)
         # from flopy.utils.flopy_io import write_grid_shapefile, shape_attr_name
-        # name = shape_attr_name(self.name, keep_layer=True)
-        # write_grid_shapefile(filename, self.model.dis.sr, {name: self.array})
+        # name = shape_attr_name(self._name, keep_layer=True)
+        # write_grid_shapefile(filename, self._model.dis.sr, {name:
+        # self.array})
         self.export(filename)
 
     def set_fmtin(self, fmtin):
@@ -1846,21 +1901,21 @@ class Util2d(object):
 
     # overloads, tries to avoid creating arrays if possible
     def __add__(self, other):
-        if self.vtype in [np.int, np.float32] and self.vtype == other.vtype:
+        if self.vtype in [np.int32, np.float32] and self.vtype == other.vtype:
             return self.__value + other.get_value()
         else:
             return self.array + other.array
 
     def __sub__(self, other):
-        if self.vtype in [np.int, np.float32] and self.vtype == other.vtype:
+        if self.vtype in [np.int32, np.float32] and self.vtype == other.vtype:
             return self.__value - other.get_value()
         else:
             return self.array - other.array
 
     def __mul__(self, other):
         if np.isscalar(other):
-            return Util2d(self.model, self.shape, self.dtype,
-                          self._array * other, self.name,
+            return Util2d(self._model, self.shape, self._dtype,
+                          self._array * other, self._name,
                           self.format.fortran, self.cnstnt, self.iprn,
                           self.ext_filename,
                           self.locat, self.format.binary)
@@ -1904,7 +1959,7 @@ class Util2d(object):
         """
         a = self.array
         a[k] = value
-        a = a.astype(self.dtype)
+        a = a.astype(self._dtype)
         self.__value = a
         if self.__value_built is not None:
             self.__value_built = None
@@ -1919,6 +1974,8 @@ class Util2d(object):
             value = value.lower()
             assert value in self._acceptable_hows
             self._how = value
+        elif key == "model":
+            self._model = value
         else:
             super(Util2d, self).__setattr__(key, value)
 
@@ -1960,11 +2017,11 @@ class Util2d(object):
         #    raise Exception("Util2d call to python_file_path " +
         #                    "for vtype != str")
         python_file_path = ''
-        if self.model.model_ws != '.':
-            python_file_path = os.path.join(self.model.model_ws)
-        if self.model.external_path is not None:
+        if self._model.model_ws != '.':
+            python_file_path = os.path.join(self._model.model_ws)
+        if self._model.external_path is not None:
             python_file_path = os.path.join(python_file_path,
-                                            self.model.external_path)
+                                            self._model.external_path)
         python_file_path = os.path.join(python_file_path,
                                         self.filename)
         return python_file_path
@@ -1992,9 +2049,9 @@ class Util2d(object):
         """
 
         model_file_path = ''
-        if self.model.external_path is not None:
+        if self._model.external_path is not None:
             model_file_path = os.path.join(model_file_path,
-                                           self.model.external_path)
+                                           self._model.external_path)
         model_file_path = os.path.join(model_file_path, self.filename)
         return model_file_path
 
@@ -2002,11 +2059,11 @@ class Util2d(object):
 
         if self.format.array_free_format:
             lay_space = '{0:>27s}'.format('')
-            if self.vtype in [int, np.int]:
+            if self.vtype in [int, np.int32]:
                 lay_space = '{0:>32s}'.format('')
             cr = 'CONSTANT ' + self.format.py[1].format(value)
             cr = '{0:s}{1:s}#{2:<30s}\n'.format(cr, lay_space,
-                                                self.name)
+                                                self._name)
         else:
             cr = self._get_fixed_cr(0, value=value)
         return cr
@@ -2017,7 +2074,7 @@ class Util2d(object):
             value = self.cnstnt
         if self.format.binary:
             if locat is None:
-                raise Exception("Util2d._get_fixed_cr(): locat is None but"+\
+                raise Exception("Util2d._get_fixed_cr(): locat is None but" + \
                                 "format is binary")
             if not self.format.array_free_format:
                 locat = -1 * np.abs(locat)
@@ -2025,30 +2082,32 @@ class Util2d(object):
             locat = 0
         if locat is 0:
             fformat = ''
-        if self.dtype == np.int:
+        if self.dtype == np.int32:
             cr = '{0:>10.0f}{1:>10.0f}{2:>19s}{3:>10.0f} #{4}\n' \
                 .format(locat, value, fformat,
-                        self.iprn, self.name)
-        elif self.dtype == np.float32:
+                        self.iprn, self._name)
+        elif self._dtype == np.float32:
             cr = '{0:>10.0f}{1:>10.5G}{2:>19s}{3:>10.0f} #{4}\n' \
                 .format(locat, value, fformat,
-                        self.iprn, self.name)
+                        self.iprn, self._name)
         else:
-            raise Exception('Util2d: error generating fixed-format ' +
-                            ' control record, dtype must be np.int or np.float32')
+            raise Exception(
+                'Util2d: error generating fixed-format control record, '
+                'dtype must be np.int32 or np.float32')
         return cr
 
     def get_internal_cr(self):
         if self.format.array_free_format:
             cr = 'INTERNAL {0:15} {1:>10s} {2:2.0f} #{3:<30s}\n' \
-                .format(self.cnstnt_str, self.format.fortran, self.iprn, self.name)
+                .format(self.cnstnt_str, self.format.fortran, self.iprn,
+                        self._name)
             return cr
         else:
             return self._get_fixed_cr(self.locat)
 
     @property
     def cnstnt_str(self):
-        if isinstance(self.cnstnt,str):
+        if isinstance(self.cnstnt, str):
             return self.cnstnt
         else:
             return "{0:15.6G}".format(self.cnstnt)
@@ -2057,20 +2116,20 @@ class Util2d(object):
         cr = 'OPEN/CLOSE  {0:>30s} {1:15} {2:>10s} {3:2.0f} {4:<30s}\n'.format(
             self.model_file_path, self.cnstnt_str,
             self.format.fortran, self.iprn,
-            self.name)
+            self._name)
         return cr
 
     def get_external_cr(self):
-        locat = self.model.next_ext_unit()
-        #if self.format.binary:
+        locat = self._model.next_ext_unit()
+        # if self.format.binary:
         #    locat = -1 * np.abs(locat)
-        self.model.add_external(self.model_file_path, locat,
+        self._model.add_external(self.model_file_path, locat,
                                 self.format.binary)
         if self.format.array_free_format:
             cr = 'EXTERNAL  {0:>30d} {1:15} {2:>10s} {3:2.0f} {4:<30s}\n'.format(
                 locat, self.cnstnt_str,
                 self.format.fortran, self.iprn,
-                self.name)
+                self._name)
             return cr
         else:
             return self._get_fixed_cr(locat)
@@ -2084,19 +2143,19 @@ class Util2d(object):
 
         if not self.format.array_free_format and self.format.free:
             print("Util2d {0}: can't be free format...resetting".format(
-                self.name))
-            self.format.free = False
+                self._name))
+            self.format._isfree = False
 
         if not self.format.array_free_format and self.how == "internal" and self.locat is None:
-            print("Util2d {0}: locat is None, but ".format(self.name) + \
+            print("Util2d {0}: locat is None, but ".format(self._name) + \
                   "model does not " + \
                   "support free format and how is internal..." + \
                   "resetting how = external")
             how = "external"
 
-        if (self.format.binary or self.model.external_path) \
+        if (self.format.binary or self._model.external_path) \
                 and how in ["constant", "internal"]:
-            print("Util2d:{0}: ".format(self.name) + \
+            print("Util2d:{0}: ".format(self._name) + \
                   "resetting 'how' to external")
             if self.format.array_free_format:
                 how = "openclose"
@@ -2111,7 +2170,7 @@ class Util2d(object):
         elif how == "external" or how == "openclose":
             if how == "openclose":
                 assert self.format.array_free_format, "Util2d error: 'how' is openclose," + \
-                                                     "but model doesn't support free fmt"
+                                                      "but model doesn't support free fmt"
 
             # write a file if needed
             if self.vtype != str:
@@ -2127,7 +2186,7 @@ class Util2d(object):
             elif self.__value != self.python_file_path:
                 if os.path.exists(self.python_file_path):
                     # if the file already exists, remove it
-                    if self.model.verbose:
+                    if self._model.verbose:
                         print("Util2d warning: removing existing array " +
                               "file {0}".format(self.model_file_path))
                     try:
@@ -2150,7 +2209,7 @@ class Util2d(object):
                 return self.get_openclose_cr()
 
         elif how == "constant":
-            if self.vtype not in [int, np.float32]:
+            if self.vtype not in [np.int32, np.float32]:
                 u = np.unique(self._array)
                 assert u.shape[
                            0] == 1, "Util2d error: 'how' is constant, but array " + \
@@ -2196,10 +2255,10 @@ class Util2d(object):
             model - with the effects of the control record multiplier applied.
 
         """
-        if isinstance(self.cnstnt,str):
+        if isinstance(self.cnstnt, str):
             print("WARNING: cnstnt is str for {0}".format(self.name))
             return self._array.astype(self.dtype)
-        if isinstance(self.cnstnt, int):
+        if isinstance(self.cnstnt, (int, np.int32)):
             cnstnt = self.cnstnt
         else:
             if self.cnstnt == 0.0:
@@ -2208,7 +2267,7 @@ class Util2d(object):
                 cnstnt = self.cnstnt
         # return a copy of self._array since it is being
         # multiplied
-        return (self._array * cnstnt).astype(self.dtype)
+        return (self._array * cnstnt).astype(self._dtype)
 
     @property
     def _array(self):
@@ -2228,18 +2287,18 @@ class Util2d(object):
                 if self.format.binary:
                     header, self.__value_built = Util2d.load_bin(self.shape,
                                                                  file_in,
-                                                                 self.dtype,
+                                                                 self._dtype,
                                                                  bintype="head")
                 else:
                     self.__value_built = Util2d.load_txt(self.shape, file_in,
-                                                         self.dtype,
+                                                         self._dtype,
                                                          self.format.fortran).astype(
-                        self.dtype)
+                        self._dtype)
                 file_in.close()
             return self.__value_built
         elif self.vtype != np.ndarray:
             if self.__value_built is None:
-                self.__value_built = np.ones(self.shape, dtype=self.dtype) \
+                self.__value_built = np.ones(self.shape, dtype=self._dtype) \
                                      * self.__value
             return self.__value_built
         else:
@@ -2247,119 +2306,119 @@ class Util2d(object):
 
     @staticmethod
     def load_block(shape, file_in, dtype):
+        """Load block format from a MT3D file to a 2-D array
+
+        Parameters
+        ----------
+        shape : tuple of int
+            Array dimensions (nrow, ncol)
+        file_in : file or str
+            Filename or file handle
+        dtype : np.int32 or np.float32
+
+        Returns
+        -------
+        2-D array
         """
-        load a (possibly wrapped format) array from a mt3d block
-        (self.__value) and casts to the proper type (self.dtype)
-        made static to support the load functionality
-        this routine now supports fixed format arrays where the numbers
-        may touch.
-        """
+        if len(shape) != 2:
+            raise ValueError(
+                'Util2d.load_block(): expected 2 dimensions, found shape {0}'
+                    .format(shape))
         nrow, ncol = shape
-        data = np.zeros(shape, dtype=dtype) + np.NaN
+        data = np.ma.zeros(shape, dtype=dtype)
+        data.mask = True
         if not hasattr(file_in, 'read'):
             file_in = open(file_in, 'r')
-        line = file_in.readline()
-        raw = line.strip('\n').split()
-        nblock = int(raw[0])
+        line = file_in.readline().strip()
+        nblock = int(line.split()[0])
         for n in range(nblock):
-            line = file_in.readline()
-            raw = line.strip('\n').split()
-            i1, i2, j1, j2, v = int(raw[0])-1, int(raw[1])-1, \
-                                int(raw[2])-1, int(raw[3])-1, \
-                                dtype(raw[4])
-            for j in range(j1, j2+1):
-                for i in range(i1, i2+1):
-                    data[i, j] = v
-        if np.isnan(np.sum(data)):
-            raise Exception("Util2d.load_block() error: np.NaN in data array")
-        return data
-
+            line = file_in.readline().strip()
+            raw = line.split()
+            if len(raw) < 5:
+                raise ValueError('Util2d.load_block(): expected 5 items, '
+                                 'found {0}: {1}'.format(len(raw), line))
+            i1, i2 = int(raw[0]) - 1, int(raw[1])
+            j1, j2 = int(raw[2]) - 1, int(raw[3])
+            data[i1:i2, j1:j2] = raw[4]
+        if data.mask.any():
+            warn('Util2d.load_block(): blocks do not cover full array')
+        return data.data
 
     @staticmethod
     def load_txt(shape, file_in, dtype, fmtin):
+        """Load formatted file to a 1-D or 2-D array
+
+        Parameters
+        ----------
+        shape : tuple of int
+            One or two array dimensions
+        file_in : file or str
+            Filename or file handle
+        dtype : np.int32 or np.float32
+        fmtin : str
+            Fortran array format descriptor, '(FREE)' or e.g. '(10G11.4)'
+
+        Notes
+        -----
+        This method is similar to MODFLOW's U1DREL, U1DINT, U2DREL and U2DINT
+        subroutines, but only for formatted files.
+
+        Returns
+        -------
+        1-D or 2-D array
         """
-        load a (possibly wrapped format) array from a file
-        (self.__value) and casts to the proper type (self.dtype)
-        made static to support the load functionality 
-        this routine now supports fixed format arrays where the numbers
-        may touch.
-        """
-        # file_in = open(self.__value,'r')
-        # file_in = open(filename,'r')
-        # nrow,ncol = self.shape
-        nrow, ncol = shape
-        npl, fmt, width, decimal = ArrayFormat.decode_fortran_descriptor(fmtin)
-        data = np.zeros((nrow * ncol), dtype=dtype) + np.NaN
-        d = 0
+        if len(shape) == 1:
+            num_items = shape[0]
+        elif len(shape) == 2:
+            nrow, ncol = shape
+            num_items = nrow * ncol
+        else:
+            raise ValueError(
+                'Util2d.load_txt(): expected 1 or 2 dimensions, found shape {0}'
+                    .format(shape))
         if not hasattr(file_in, 'read'):
             file_in = open(file_in, 'r')
-        while True:
+        npl, fmt, width, decimal = ArrayFormat.decode_fortran_descriptor(fmtin)
+        items = []
+        while len(items) < num_items:
             line = file_in.readline()
-            if line in [None, ''] or d == nrow * ncol:
-                break
+            if len(line) == 0:
+                raise ValueError('Util2d.load_txt(): no data found')
             if npl == 'free':
-                raw = line.strip('\n').split()
-                if len(raw) == 1 and ',' in line:
-                    raw = raw[0].split(',')
-                elif ',' in line:
-                    raw = line.replace(',', '').strip('\n').split()
-                elif '*' in line:
-                    rawins = []
-                    rawremove = []
-                    for idx, t in enumerate(raw):
-                        if '*' in t:
-                            #print(t)
-                            rawremove.append(t)
-                            tt = t.split('*')
-                            tlist = []
-                            for jdx in range(int(tt[0])):
-                                tlist.append(tt[1])
-                            rawins.append((idx, list(tlist)))
-                    iadd = 1
-                    for t in rawins:
-                        ipos = t[0] + iadd
-                        for tt in t[1]:
-                            raw.insert(ipos, tt)
-                            ipos += 1
-                            iadd += 1
-                    raw = [e for e in raw if e not in rawremove]
-            else:
-                # split line using number of values in the line
-                rawlist = []
-                istart = 0
-                istop = width
+                if ',' in line:
+                    line = line.replace(',', ' ')
+                if '*' in line:  # use slower method for these types of lines
+                    for item in line.split():
+                        if '*' in item:
+                            num, val = item.split('*')
+                            # repeat val num times
+                            items += int(num) * [val]
+                        else:
+                            items.append(item)
+                else:
+                    items += line.split()
+            else:  # fixed width
+                pos = 0
                 for i in range(npl):
-                    txtval = line[istart:istop]
-                    if txtval.strip() != '':
-                        rawlist.append(txtval)
-                    else:
+                    try:
+                        item = line[pos:pos + width].strip()
+                        pos += width
+                        if item:
+                            items.append(item)
+                    except IndexError:
                         break
-                    istart = istop
-                    istop += width
-                raw = rawlist
-
-            for a in raw:
-                try:
-                    data[d] = dtype(a)
-                except:
-                    raise Exception('Util2d:unable to cast value: ' +
-                                    str(a) + ' to type:' + str(dtype))
-                if d == (nrow * ncol) - 1:
-                    assert len(data) == (nrow * ncol)
-                    data.resize(nrow, ncol)
-                    return data
-                d += 1
-                #        file_in.close()
-        if np.isnan(np.sum(data)):
-            raise Exception("Util2d.load_txt() error: np.NaN in data array")
-        data.resize(nrow, ncol)
-        return data
+        data = np.fromiter(items, dtype=dtype, count=num_items)
+        if data.size != num_items:
+            raise ValueError('Util2d.load_txt(): expected array size {0},'
+                             ' but found size {1}'.format(num_items,
+                                                          data.size))
+        return data.reshape(shape)
 
     @staticmethod
     def write_txt(shape, file_out, data, fortran_format="(FREE)",
                   python_format=None):
         if fortran_format.upper() == '(FREE)' and python_format is None:
-            np.savetxt(file_out, data,
+            np.savetxt(file_out, np.atleast_2d(data),
                        ArrayFormat.get_default_numpy_fmt(data.dtype),
                        delimiter='')
             return
@@ -2375,7 +2434,7 @@ class Util2d(object):
         """
         return a string representation of
         a (possibly wrapped format) array from a file
-        (self.__value) and casts to the proper type (self.dtype)
+        (self.__value) and casts to the proper type (self._dtype)
         made static to support the load functionality
         this routine now supports fixed format arrays where the numbers
         may touch.
@@ -2428,30 +2487,65 @@ class Util2d(object):
 
     @staticmethod
     def load_bin(shape, file_in, dtype, bintype=None):
+        """Load unformatted file to a 2-D array
+
+        Parameters
+        ----------
+        shape : tuple of int
+            One or two array dimensions
+        file_in : file or str
+            Filename or file handle
+        dtype : np.int32 or np.float32
+            Data type of unformatted file and Numpy array; use np.int32 for
+            Fortran's INTEGER, and np.float32 for Fortran's REAL data types.
+        bintype : str
+            Normally 'Head'
+
+        Notes
+        -----
+        This method is similar to MODFLOW's U2DREL and U2DINT subroutines,
+        but only for unformatted files.
+
+        Returns
+        -------
+        2-D array
+        """
         import flopy.utils.binaryfile as bf
         nrow, ncol = shape
-        if bintype is not None and not np.issubdtype(dtype, np.integer):
+        num_items = nrow * ncol
+        if dtype != np.int32 and np.issubdtype(dtype, np.integer):
+            # Modflow only uses 4-byte integers
+            dtype = np.dtype(dtype)
+            if dtype.itemsize != 4:
+                # show warning for platforms where int is not 4-bytes
+                warn('Util2d: setting integer dtype from {0} to int32'
+                     .format(dtype))
+            dtype = np.int32
+        if not hasattr(file_in, 'read'):
+            file_in = open(file_in, 'rb')
+        header_data = None
+        if bintype is not None and np.issubdtype(dtype, np.floating):
             header_dtype = bf.BinaryHeader.set_dtype(bintype=bintype)
             header_data = np.fromfile(file_in, dtype=header_dtype, count=1)
-        else:
-            header_data = None
-        data = np.fromfile(file_in, dtype=dtype, count=nrow * ncol)
-        data.resize(nrow, ncol)
-        return [header_data, data]
+        data = np.fromfile(file_in, dtype=dtype, count=num_items)
+        if data.size != num_items:
+            raise ValueError('Util2d.load_bin(): expected array size {0},'
+                             ' but found size {1}'.format(num_items,
+                                                          data.size))
+        return header_data, data.reshape(shape)
 
     @staticmethod
     def write_bin(shape, file_out, data, bintype=None, header_data=None):
         if not hasattr(file_out, 'write'):
             file_out = open(file_out, 'wb')
         dtype = data.dtype
-        if dtype.kind != 'i':
-            if bintype is not None:
-                if header_data is None:
-                    header_data = BinaryHeader.create(bintype=bintype,
-                                                      nrow=shape[0],
-                                                      ncol=shape[1])
-            if header_data is not None:
-                header_data.tofile(file_out)
+        if bintype is not None:
+            if header_data is None:
+                header_data = BinaryHeader.create(bintype=bintype,
+                                                  nrow=shape[0],
+                                                  ncol=shape[1])
+        if header_data is not None:
+            header_data.tofile(file_out)
         data.tofile(file_out)
         return
 
@@ -2464,7 +2558,7 @@ class Util2d(object):
             value = np.array(value)
 
         if isinstance(value, bool):
-            if self.dtype == np.bool:
+            if self._dtype == np.bool:
                 try:
                     self.__value = np.bool(value)
 
@@ -2479,9 +2573,9 @@ class Util2d(object):
             if os.path.exists(value):
                 self.__value = value
                 return
-            elif self.dtype == np.int:
+            elif self.dtype == np.int32:
                 try:
-                    self.__value = int(value)
+                    self.__value = np.int32(value)
                 except:
                     raise Exception("Util2d error: str not a file and " +
                                     "couldn't be cast to int: {0}".format(
@@ -2496,13 +2590,13 @@ class Util2d(object):
                                         value))
 
         elif np.isscalar(value):
-            if self.dtype == np.int:
+            if self.dtype == np.int32:
                 try:
-                    self.__value = np.int(value)
+                    self.__value = np.int32(value)
                 except:
                     raise Exception('Util2d:could not cast scalar ' +
                                     'value to type "int": ' + str(value))
-            elif self.dtype == np.float32:
+            elif self._dtype == np.float32:
                 try:
                     self.__value = np.float32(value)
                 except:
@@ -2519,8 +2613,8 @@ class Util2d(object):
                 raise Exception('Util2d:self.shape: ' + str(self.shape) +
                                 ' does not match value.shape: ' +
                                 str(value.shape))
-            if self.dtype != value.dtype:
-                value = value.astype(self.dtype)
+            if self._dtype != value.dtype:
+                value = value.astype(self._dtype)
             self.__value = value
 
         else:
@@ -2529,12 +2623,12 @@ class Util2d(object):
 
     @staticmethod
     def load(f_handle, model, shape, dtype, name, ext_unit_dict=None,
-             array_free_format=None,array_format="modflow"):
+             array_free_format=None, array_format="modflow"):
         """
         functionality to load Util2d instance from an existing
         model input file.
         external and internal record types must be fully loaded
-        if you are using fixed format record types,make sure 
+        if you are using fixed format record types,make sure
         ext_unit_dict has been initialized from the NAM file
         """
         if shape == (0, 0):
@@ -2550,8 +2644,8 @@ class Util2d(object):
                     break
 
         # Allows for special MT3D array reader
-        #array_format = None
-        #if hasattr(model, 'array_format'):
+        # array_format = None
+        # if hasattr(model, 'array_format'):
         #    array_format = model.array_format
 
         cr_dict = Util2d.parse_control_record(f_handle.readline(),
@@ -2601,18 +2695,20 @@ class Util2d(object):
                          array_free_format=array_free_format)
 
         elif cr_dict['type'] == 'external':
-            if str('binary') not in str(cr_dict['fmtin'].lower()):
+            ext_unit = ext_unit_dict[cr_dict['nunit']]
+            if ext_unit.filehandle is None:
+                raise IOError('cannot read unit {0}, filename: {1}'
+                              .format(cr_dict['nunit'], ext_unit.filename))
+            elif 'binary' not in str(cr_dict['fmtin'].lower()):
                 assert cr_dict['nunit'] in list(ext_unit_dict.keys())
-                data = Util2d.load_txt(shape,
-                                       ext_unit_dict[
-                                           cr_dict['nunit']].filehandle,
+                data = Util2d.load_txt(shape, ext_unit.filehandle,
                                        dtype, cr_dict['fmtin'])
             else:
                 if cr_dict['nunit'] not in list(ext_unit_dict.keys()):
                     cr_dict["nunit"] *= -1
                 assert cr_dict['nunit'] in list(ext_unit_dict.keys())
                 header_data, data = Util2d.load_bin(
-                    shape, ext_unit_dict[cr_dict['nunit']].filehandle, dtype,
+                    shape, ext_unit.filehandle, dtype,
                     bintype='Head')
             u2d = Util2d(model, shape, dtype, data, name=name,
                          iprn=cr_dict['iprn'], fmtin="(FREE)",
@@ -2659,7 +2755,9 @@ class Util2d(object):
                 else:
                     cnstnt = np.int(raw[1].lower())
                 fmtin = raw[2].strip()
-                iprn = int(raw[3])
+                iprn = 0
+                if len(raw) >= 4:
+                    iprn = int(raw[3])
             elif raw[0].lower() == 'external':
                 if ext_unit_dict is not None:
                     try:
@@ -2668,15 +2766,15 @@ class Util2d(object):
                     except:
                         pass
 
-
-                    
                 nunit = int(raw[1])
                 if isfloat:
                     cnstnt = np.float(raw[2].lower().replace('d', 'e'))
                 else:
                     cnstnt = np.int(raw[2].lower())
                 fmtin = raw[3].strip()
-                iprn = int(raw[4])
+                iprn = 0
+                if len(raw) >= 5:
+                    iprn = int(raw[4])
             elif raw[0].lower() == 'open/close':
                 fname = raw[1].strip()
                 if isfloat:
@@ -2684,7 +2782,9 @@ class Util2d(object):
                 else:
                     cnstnt = np.int(raw[2].lower())
                 fmtin = raw[3].strip()
-                iprn = int(raw[4])
+                iprn = 0
+                if len(raw) >= 5:
+                    iprn = int(raw[4])
                 npl, fmt, width, decimal = None, None, None, None
         else:
             locat = np.int(line[0:10].strip())
@@ -2699,7 +2799,7 @@ class Util2d(object):
                     cnstnt = np.int(line[10:20].strip())
                 else:
                     cnstnt = 0
-                #if cnstnt == 0:
+                # if cnstnt == 0:
                 #    cnstnt = 1
             if locat != 0:
                 if len(line) >= 40:

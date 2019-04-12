@@ -54,7 +54,7 @@ class ListBudget(object):
 
         self.tssp_lines = 0
 
-        # Assign the budgetkey, which should have been overriden
+        # Assign the budgetkey, which should have been overridden
         if budgetkey is None:
             self.set_budget_key()
         else:
@@ -265,7 +265,7 @@ class ListBudget(object):
         Returns
         -------
         out : float
-        Floating point value with the runtime in requested units. Returns NaN if runtime not foudn in list file
+        Floating point value with the runtime in requested units. Returns NaN if runtime not found in list file
 
         Examples
         --------
@@ -450,7 +450,7 @@ class ListBudget(object):
 
         Returns
         -------
-        out : panda dataframes
+        out : pandas dataframes
             Pandas dataframes with the incremental and cumulative water budget
             items in list file. A separate pandas dataframe is returned for the
             incremental and cumulative water budget entries.
@@ -465,9 +465,8 @@ class ListBudget(object):
         try:
             import pandas as pd
         except Exception as e:
-            raise Exception(
-                    "ListBudget.get_dataframe() error import pandas: " + \
-                    str(e))
+            msg = "ListBudget.get_dataframe(): requires pandas: " + str(e)
+            raise ImportError(msg)
 
         if not self._isvalid:
             return None

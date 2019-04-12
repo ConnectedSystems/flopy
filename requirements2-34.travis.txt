@@ -1,8 +1,0 @@
-matplotlib
-netcdf4<1.2.8
-fiona
-descartes
-pyproj
-pyshp
-enum34
-pandas

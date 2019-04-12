@@ -314,7 +314,7 @@ tagged false
 in_record true
 reader urword
 longname conductance equation
-description character string that defines the conductance equation that is used to calculate the saturated conductance for the multi-aquifer well. Possible multi-aquifer well CONDEQN strings include: SPECIFIED--character keyword to indicate the multi-aquifer well saturated conductance will be specified.  THEIM--character keyword to indicate the multi-aquifer well saturated conductance will be calculated using the Theim equation, which considers the cell top and bottom, aquifer hydraulic conductivity, and effective cell and well radius.  SKIN--character keyword to indicate that the multi-aquifer well saturated conductance will be calculated using the cell top and bottom, aquifer and screen hydraulic conductivity, and well and skin radius.    CUMULATIVE--character keyword to indicate that the multi-aquifer well saturated conductance will be calculated using a combination of the Theim and SKIN equations.  MEAN--character keyword to indicate the multi-aquifer well saturated conductance will be calculated using the aquifer and screen top and bottom, aquifer and screen hydraulic conductivity, and well and skin radius. 
+description character string that defines the conductance equation that is used to calculate the saturated conductance for the multi-aquifer well. Possible multi-aquifer well CONDEQN strings include: SPECIFIED--character keyword to indicate the multi-aquifer well saturated conductance will be specified.  THIEM--character keyword to indicate the multi-aquifer well saturated conductance will be calculated using the Thiem equation, which considers the cell top and bottom, aquifer hydraulic conductivity, and effective cell and well radius.  SKIN--character keyword to indicate that the multi-aquifer well saturated conductance will be calculated using the cell top and bottom, aquifer and screen hydraulic conductivity, and well and skin radius.    CUMULATIVE--character keyword to indicate that the multi-aquifer well saturated conductance will be calculated using a combination of the Thiem and SKIN equations.  MEAN--character keyword to indicate the multi-aquifer well saturated conductance will be calculated using the aquifer and screen top and bottom, aquifer and screen hydraulic conductivity, and well and skin radius.
 
 block packagedata
 name ngwfnodes
@@ -389,7 +389,7 @@ tagged false
 in_record true
 reader urword
 longname cell identifier
-description is the cell identifier, and depends on the type of grid that is used for the simulation.  For a structured grid that uses the DIS input file, CELLID is the layer, row, and column.   For a grid that uses the DISV input file, CELLID is the layer and CELL2D number.  If the model uses the unstructured discretization (DISU) input file, CELLID is the node number for the cell. One or more screened intervals can be connected to the same CELLID if CONDEQN for a well is MEAN. The program will terminate with an error if MAW wells using SPECIFIED, THEIM, SKIN, or CUMULATIVE conductance equations have more than one connection to the same CELLID.
+description is the cell identifier, and depends on the type of grid that is used for the simulation.  For a structured grid that uses the DIS input file, CELLID is the layer, row, and column.   For a grid that uses the DISV input file, CELLID is the layer and CELL2D number.  If the model uses the unstructured discretization (DISU) input file, CELLID is the node number for the cell. One or more screened intervals can be connected to the same CELLID if CONDEQN for a well is MEAN. The program will terminate with an error if MAW wells using SPECIFIED, THIEM, SKIN, or CUMULATIVE conductance equations have more than one connection to the same CELLID.
 
 block connectiondata
 name scrn_top
@@ -399,7 +399,7 @@ tagged false
 in_record true
 reader urword
 longname screen top
-description value that defines the top elevation of the screen for the multi-aquifer well connection. If the specified SCRN\_TOP is greater than the top of the GWF cell it is set equal to the top of the cell.  SCRN\_TOP can be any value if CONDEQN is SPECIFIED, THEIM, SKIN, or COMPOSITE and SCRN\_TOP is set to the top of the cell.
+description value that defines the top elevation of the screen for the multi-aquifer well connection. If the specified SCRN\_TOP is greater than the top of the GWF cell it is set equal to the top of the cell.  SCRN\_TOP can be any value if CONDEQN is SPECIFIED, THIEM, SKIN, or COMPOSITE and SCRN\_TOP is set to the top of the cell.
 
 block connectiondata
 name scrn_bot
@@ -409,7 +409,7 @@ tagged false
 in_record true
 reader urword
 longname screen bottom
-description value that defines the bottom elevation of the screen for the multi-aquifer well connection. If the specified SCRN\_BOT is less than the bottom of the GWF cell it is set equal to the bottom of the cell.  SCRN\_BOT can be any value if CONDEQN is SPECIFIED, THEIM, SKIN, or COMPOSITE and SCRN\_BOT is set to the bottom of the cell.
+description value that defines the bottom elevation of the screen for the multi-aquifer well connection. If the specified SCRN\_BOT is less than the bottom of the GWF cell it is set equal to the bottom of the cell.  SCRN\_BOT can be any value if CONDEQN is SPECIFIED, THIEM, SKIN, or COMPOSITE and SCRN\_BOT is set to the bottom of the cell.
 
 block connectiondata
 name hk_skin
@@ -419,7 +419,7 @@ tagged false
 in_record true
 reader urword
 longname skin data
-description value that defines the skin (filter pack) hydraulic conductivity (if CONDEQN for the multi-aquifer well is SKIN, CUMULATIVE, or MEAN) or conductance (if CONDEQN for the multi-aquifer well is SPECIFIED) for each GWF node connected to the multi-aquifer well (NGWFNODES). HK\_SKIN can be any value if CONDEQN is THEIM.
+description value that defines the skin (filter pack) hydraulic conductivity (if CONDEQN for the multi-aquifer well is SKIN, CUMULATIVE, or MEAN) or conductance (if CONDEQN for the multi-aquifer well is SPECIFIED) for each GWF node connected to the multi-aquifer well (NGWFNODES). HK\_SKIN can be any value if CONDEQN is THIEM.
 
 block connectiondata
 name radius_skin
@@ -429,7 +429,7 @@ tagged false
 in_record true
 reader urword
 longname skin radius
-description real value that defines the skin radius (filter pack radius) for the multi-aquifer well. RADIUS\_SKIN can be any value if CONDEQN is SPECIFIED or THEIM. Otherwise, RADIUS\_SKIN must be greater than RADIUS for the multi-aquifer well.
+description real value that defines the skin radius (filter pack radius) for the multi-aquifer well. RADIUS\_SKIN can be any value if CONDEQN is SPECIFIED or THIEM. Otherwise, RADIUS\_SKIN must be greater than RADIUS for the multi-aquifer well.
 
 
 # --------------------- gwf maw period ---------------------
@@ -565,7 +565,7 @@ tagged true
 in_record true
 reader urword
 longname head limit
-description is the limiting water level (head) in the well, which is the minimum of the well RATE or the well inflow rate from the aquifer. HEAD\_LIMIT is only applied to discharging wells (RATE $<$ 0). HEAD\_LIMIT can be deactivated by specifying the text string `OFF'. The HEAD\_LIMIT option is based on the HEAD\_LIMIT functionality available in the MNW2~\citep{konikow2009} package for MODFLOW-2005. The HEAD\_LIMIT option has been included to facilitate backward compatibility with previous versions of MODFLOW but use of the RATE\_SCALING option instead of the HEAD\_LIMIT option is recommended. By default, HEAD\_LIMIT is `OFF'.
+description is the limiting water level (head) in the well, which is the minimum of the well RATE or the well inflow rate from the aquifer. HEAD\_LIMIT can be applied to extraction wells (RATE $<$ 0) or injection wells (RATE $>$ 0). HEAD\_LIMIT can be deactivated by specifying the text string `OFF'. The HEAD\_LIMIT option is based on the HEAD\_LIMIT functionality available in the MNW2~\citep{konikow2009} package for MODFLOW-2005. The HEAD\_LIMIT option has been included to facilitate backward compatibility with previous versions of MODFLOW but use of the RATE\_SCALING option instead of the HEAD\_LIMIT option is recommended. By default, HEAD\_LIMIT is `OFF'.
 
 block period
 name shutoffrecord
@@ -584,7 +584,7 @@ shape
 in_record true
 reader urword
 longname shut off well
-description keyword for activating well shut off capability.  Subsequent values define the minimum and maximum pumping rate that a well must exceed to shutoff or reactivate a well, respectively, during a stress period. SHUT\_OFF is only applied to discharging wells (RATE$<0$) and if HEAD\_LIMIT is specified (not set to `OFF').  If HEAD\_LIMIT is specified, SHUT\_OFF can be deactivated by specifying a minimum value equal to zero. The SHUT\_OFF option is based on the SHUT\_OFF functionality available in the MNW2~\citep{konikow2009} package for MODFLOW-2005. The SHUT\_OFF option has been included to facilitate backward compatibility with previous versions of MODFLOW but use of the RATE\_SCALING option instead of the SHUT\_OFF option is recommended. By default, SHUT\_OFF is not used.
+description keyword for activating well shut off capability.  Subsequent values define the minimum and maximum pumping rate that a well must exceed to shutoff or reactivate a well, respectively, during a stress period. SHUT\_OFF is only applied to injection wells (RATE$<0$) and if HEAD\_LIMIT is specified (not set to `OFF').  If HEAD\_LIMIT is specified, SHUT\_OFF can be deactivated by specifying a minimum value equal to zero. The SHUT\_OFF option is based on the SHUT\_OFF functionality available in the MNW2~\citep{konikow2009} package for MODFLOW-2005. The SHUT\_OFF option has been included to facilitate backward compatibility with previous versions of MODFLOW but use of the RATE\_SCALING option instead of the SHUT\_OFF option is recommended. By default, SHUT\_OFF is not used.
 
 block period
 name minrate
@@ -623,7 +623,7 @@ shape
 in_record true
 reader urword
 longname rate scaling
-description activate rate scaling.  If RATE\_SCALING is specified, both PUMP\_ELEVATION and SCALING\_LENGTH must be specified. RATE\_SCALING cannot be used with HEAD\_LIMIT.
+description activate rate scaling.  If RATE\_SCALING is specified, both PUMP\_ELEVATION and SCALING\_LENGTH must be specified. RATE\_SCALING cannot be used with HEAD\_LIMIT.  RATE\_SCALING can be used for extraction or injection wells.  For extraction wells, the extraction rate will start to decrease once the head in the well lowers to a level equal to the pump elevation plus the scaling length.  If the head in the well drops below the pump elevation, then the extraction rate is calculated to be zero.  For an injection well, the injection rate will begin to decrease once the head in the well rises above the specified pump elevation.  If the head in the well rises above the pump elevation plus the scaling length, then the injection rate will be set to zero.
 
 block period
 name pump_elevation
@@ -633,7 +633,7 @@ tagged false
 in_record true
 reader urword
 longname pump elevation
-description is the elevation of the multi-aquifer well pump (PUMP\_ELEVATION).  PUMP\_ELEVATION cannot be less than the bottom elevation (BOTTOM) of the multi-aquifer well. By default, PUMP\_ELEVATION is set equal to the bottom of the largest GWF node number connected to a MAW well.
+description is the elevation of the multi-aquifer well pump (PUMP\_ELEVATION).  PUMP\_ELEVATION should not be less than the bottom elevation (BOTTOM) of the multi-aquifer well.
 
 block period
 name scaling_length
@@ -643,7 +643,7 @@ tagged false
 in_record true
 reader urword
 longname
-description height above the pump elevation (SCALING\_LENGTH) below which the pumping rate is reduced.  The default value for SCALING\_LENGTH is the well radius.
+description height above the pump elevation (SCALING\_LENGTH).  If the simulated well head is below this elevation (pump elevation plus the scaling length), then the pumping rate is reduced.
 
 block period
 name auxiliaryrecord

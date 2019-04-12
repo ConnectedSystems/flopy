@@ -10,6 +10,7 @@ import glob
 import flopy
 from flopy.utils.util_array import Util2d
 import numpy as np
+import sys
 
 cpth = os.path.join('temp', 't034')
 if not os.path.isdir(cpth):
@@ -139,7 +140,6 @@ def test_create():
                     # the created finf arrays all have a mult of 1
                     assert np.array_equal(a.array, l2[i].array)
 
-
 def test_load_and_write():
     # load in the test problem
     m = flopy.modflow.Modflow('UZFtest2', model_ws=cpth, verbose=True)
@@ -179,7 +179,324 @@ def test_load_and_write():
                 for i, a in enumerate(a1):
                     assert a == l2[i]
 
+    # load uzf test problem for nwt model with 'nwt_11_fmt'-style options and 'open/close' array types
+    tpth = os.path.join('..', 'examples', 'data', 'uzf_examples', 'load_uzf_for_nwt')
+    [shutil.copy(os.path.join(tpth, f), os.path.join(cpth, f)) for f in os.listdir(tpth)]
+    m3 = flopy.modflow.Modflow('UZFtest3', version='mfnwt', verbose=True)
+    m3.model_ws = cpth
+    dis = flopy.modflow.ModflowDis.load(os.path.join(tpth, 'UZFtest3.dis'), m3)
+    uzf = flopy.modflow.ModflowUzf1.load(os.path.join(tpth, 'UZFtest3.uzf'), m3)
+    assert np.sum(uzf.iuzfbnd.array) == 28800
+    assert np.isclose(np.sum(uzf.finf.array) / uzf.finf[per].cnstnt, 13.7061, atol=1e-4)
+
+
+def test_uzf_surfk():
+    ws = os.path.join('..','examples', 'data', 'uzf_examples')
+    uzf_name = "UZFtest4.uzf"
+    dis_name = "UZFtest2.dis"
+    ml = flopy.modflow.Modflow(modelname='UZFtest4', version='mfnwt')
+    dis = flopy.modflow.ModflowDis.load(os.path.join(ws, dis_name), ml,
+                                        ext_unit_dict={})
+    uzf = flopy.modflow.ModflowUzf1.load(os.path.join(ws, uzf_name),
+                                         ml, ext_unit_dict={})
+
+    assert uzf.options.seepsurfk
+    assert abs(np.unique(uzf.surfk.array)[0] - 0.099) < 1e-06
+
+    ws2 = os.path.join('temp', 't034')
+    ml.change_model_ws(ws2)
+    dis.write_file()
+    uzf.write_file()
+
+    ml2 = flopy.modflow.Modflow(version="mfnwt")
+    dis2 = flopy.modflow.ModflowDis.load(os.path.join(ws2, "UZFtest4.dis"), ml2,
+                                         ext_unit_dict={})
+    uzf2 = flopy.modflow.ModflowUzf1.load(os.path.join(ws2, uzf_name),
+                                          ml2, ext_unit_dict={})
+
+    assert uzf2.options.seepsurfk
+    assert np.allclose(uzf.surfk.array, uzf2.surfk.array)
+
+
+def test_read_write_nwt_options():
+    if sys.version_info[0] > 2:
+        from io import StringIO
+    else:
+        from cStringIO import StringIO
+
+    from flopy.modflow import ModflowWel, ModflowUzf1, ModflowSfr2
+    from flopy.utils.optionblock import OptionBlock
+
+    welstr = "OPTIONS\nSPECIFY 0.5 10\nTABFILES 2 28\nEND\n"
+    uzfstr = "OPTIONS\nSPECIFYTHTR\nSPECIFYTHTI\nNOSURFLEAK\n" \
+             "SPECIFYSURFK\nSEEPSURFK\nETSQUARE 0.7\nNETFLUX 10 20\n" \
+             "SAVEFINF\nEND\n"
+    sfrstr = "OPTIONS\nREACHINPUT\nTRANSROUTE\nTABFILES 10 21\n" \
+             "LOSSFACTOR 0.5\nSTRHC1KH 0.1\nSTRHC1KV 0.2\nEND\n"
+
+    welopt = OptionBlock.load_options(StringIO(welstr), ModflowWel)
+    uzfopt = OptionBlock.load_options(StringIO(uzfstr), ModflowUzf1)
+    sfropt = OptionBlock.load_options(StringIO(sfrstr), ModflowSfr2)
+
+    assert repr(welopt) == welstr
+    assert repr(uzfopt) == uzfstr
+    assert repr(sfropt) == sfrstr
+
+    welopt.write_options(os.path.join(cpth, "welopt.txt"))
+    uzfopt.write_options(os.path.join(cpth, 'uzfopt.txt'))
+    sfropt.write_options(os.path.join(cpth, 'sfropt.txt'))
+
+    welopt = OptionBlock.load_options(os.path.join(cpth, "welopt.txt"),
+                                      ModflowWel)
+    uzfopt = OptionBlock.load_options(os.path.join(cpth, 'uzfopt.txt'),
+                                      ModflowUzf1)
+    sfropt = OptionBlock.load_options(os.path.join(cpth, "sfropt.txt"),
+                                      ModflowSfr2)
+
+    assert repr(welopt) == welstr
+    assert repr(uzfopt) == uzfstr
+    assert repr(sfropt) == sfrstr
+
+
+def test_load_write_sfr_option_block():
+    ws = os.path.join("..", "examples", "data", "options")
+    sfr_name = "sagehen_ob.sfr"
+
+    ml = flopy.modflow.Modflow(modelname="optionblock",
+                               version='mfnwt', verbose=False)
+
+    dis = flopy.modflow.ModflowDis.load(os.path.join(ws, "sagehen.dis"),
+                                        model=ml, ext_unit_dict={},
+                                        check=False)
+
+    sfr = flopy.modflow.ModflowSfr2.load(os.path.join(ws, sfr_name),
+                                         ml, nper=2, ext_unit_dict={})
+
+    sfr_name2 = "sagehen_ob2.sfr"
+    sfr.write_file(filename=os.path.join(cpth, sfr_name2))
+    ml.remove_package('SFR')
+
+    sfr2 = flopy.modflow.ModflowSfr2.load(os.path.join(cpth, sfr_name2),
+                                          ml, nper=2, ext_unit_dict={})
+
+    assert sfr.options.reachinput == sfr2.options.reachinput
+    assert sfr.options.strhc1kh == sfr2.options.strhc1kh
+    assert sfr.options.factorkh == sfr.options.factorkh
+    assert sfr.options.strhc1kv == sfr2.options.strhc1kv
+    assert sfr.options.factorkv == sfr2.options.factorkv
+    assert sfr2.options.factorkv == 0.4
+    assert sfr2.options.factorkh == 0.2
+
+    sfr2.options.strhc1kh = False
+    sfr2.options.strhc1kv = False
+    sfr2.write_file(os.path.join(cpth, sfr_name2))
+    ml.remove_package("SFR")
+
+    sfr3 = flopy.modflow.ModflowSfr2.load(os.path.join(cpth, sfr_name2),
+                                          ml, nper=2, ext_unit_dict={})
+
+    assert sfr3.options.strhc1kh == False
+    assert sfr3.options.strhc1kv == False
+
+
+def test_load_write_sfr_option_line():
+    ws = os.path.join("..", "examples", "data", "options")
+    sfr_name = "sagehen.sfr"
+
+    # test with modflow-nwt
+    ml = flopy.modflow.Modflow(modelname="optionblock",
+                               version='mfnwt', verbose=False)
+
+    dis = flopy.modflow.ModflowDis.load(os.path.join(ws, "sagehen.dis"),
+                                        model=ml, ext_unit_dict={},
+                                        check=False)
+
+    sfr = flopy.modflow.ModflowSfr2.load(os.path.join(ws, sfr_name),
+                                         ml, nper=2, ext_unit_dict={})
+
+    sfr_name2 = "sagehen2.sfr"
+    sfr.write_file(os.path.join(cpth, sfr_name2))
+    ml.remove_package('SFR')
+
+    sfr2 = flopy.modflow.ModflowSfr2.load(os.path.join(cpth, sfr_name2),
+                                          ml, nper=2, ext_unit_dict={})
+
+    assert sfr2.reachinput
+    assert sfr2.options.factorkv == 0.4
+    assert sfr2.options.factorkh == 0.2
+
+    # test with modflow-2005
+    ml = flopy.modflow.Modflow(modelname="optionblock",
+                               verbose=False)
+
+    dis = flopy.modflow.ModflowDis.load(os.path.join(ws, "sagehen.dis"),
+                                        model=ml, ext_unit_dict={},
+                                        check=False)
+
+    sfr = flopy.modflow.ModflowSfr2.load(os.path.join(ws, sfr_name),
+                                         ml, nper=2, ext_unit_dict={})
+
+    sfr_name2 = "sagehen2.sfr"
+    sfr.write_file(os.path.join(cpth, sfr_name2))
+    ml.remove_package("SFR")
+
+    sfr2 = flopy.modflow.ModflowSfr2.load(os.path.join(cpth, sfr_name2),
+                                          ml, nper=2, ext_unit_dict={})
+
+    assert sfr2.reachinput
+
+
+def test_load_write_uzf_option_block():
+    ws = os.path.join("..", "examples", "data", "options")
+    uzf_name = "sagehen_ob.uzf"
+
+    ml = flopy.modflow.Modflow(modelname="optionblock",
+                               version='mfnwt', verbose=False)
+
+    dis = flopy.modflow.ModflowDis.load(os.path.join(ws, "sagehen.dis"),
+                                        model=ml, ext_unit_dict={},
+                                        check=False)
+
+    uzf = flopy.modflow.ModflowUzf1.load(os.path.join(ws, uzf_name),
+                                         ml, ext_unit_dict=None,
+                                         check=False)
+
+    uzf_name2 = "sagehen_ob2.uzf"
+    uzf.write_file(os.path.join(cpth, uzf_name2))
+    ml.remove_package("UZF")
+
+    uzf2 = flopy.modflow.ModflowUzf1.load(os.path.join(cpth, uzf_name2),
+                                          ml, ext_unit_dict=None,
+                                          check=False)
+
+    assert uzf.options.nosurfleak == uzf2.options.nosurfleak
+    assert uzf.options.etsquare == uzf2.options.etsquare
+    assert uzf.options.savefinf == uzf2.options.savefinf
+
+    uzf2.smoothfact = 0.4
+
+    uzf2.write_file(os.path.join(cpth, uzf_name2))
+    ml.remove_package("UZF")
+
+    uzf3 = flopy.modflow.ModflowUzf1.load(os.path.join(cpth, uzf_name2),
+                                          ml, check=False)
+
+    assert uzf3.options.smoothfact == 0.4
+    assert uzf3.smoothfact == 0.4
+    ml.remove_package("UZF")
+
+
+def test_load_write_uzf_option_line():
+    ws = os.path.join("..", "examples", "data", "options")
+    uzf_name = "sagehen.uzf"
+
+    # test with modflow-nwt
+    ml = flopy.modflow.Modflow(modelname="optionblock",
+                               version='mfnwt', verbose=False)
+
+    dis = flopy.modflow.ModflowDis.load(os.path.join(ws, "sagehen.dis"),
+                                        model=ml, ext_unit_dict={},
+                                        check=False)
+
+    uzf = flopy.modflow.ModflowUzf1.load(os.path.join(ws, uzf_name),
+                                         ml, check=False)
+
+    assert uzf.nosurfleak
+    assert uzf.etsquare
+    assert uzf.smoothfact == 0.2
+    assert uzf.options.savefinf
+
+    uzf_name2 = "sagehen2.uzf"
+    uzf.write_file(os.path.join(cpth, uzf_name2))
+    ml.remove_package("UZF")
+
+    uzf2 = flopy.modflow.ModflowUzf1.load(os.path.join(cpth, uzf_name2),
+                                          ml, check=False)
+
+    assert uzf2.nosurfleak
+    assert uzf2.etsquare
+    assert uzf2.smoothfact == 0.2
+    assert uzf2.options.savefinf
+
+
+def test_load_write_wel_option_block():
+    ws = os.path.join("..", "examples", "data", "options")
+    wel_name = "sagehen_ob.wel"
+
+    ml = flopy.modflow.Modflow(modelname="optionblock",
+                               version='mfnwt', verbose=False)
+
+    wel = flopy.modflow.ModflowWel.load(os.path.join(ws, wel_name),
+                                        ml, nper=2, ext_unit_dict={},
+                                        check=False)
+
+    wel_name2 = "sagehen_ob2.wel"
+    wel.write_file(os.path.join(cpth, wel_name2))
+    ml.remove_package("WEL")
+
+    wel2 = flopy.modflow.ModflowWel.load(os.path.join(cpth, wel_name2),
+                                         ml, nper=2, ext_unit_dict={},
+                                         check=False)
+
+    assert wel2.options.tabfiles == wel.options.tabfiles
+    assert wel2.options.specify == wel.options.specify
+    assert wel2.options.noprint == wel.options.noprint
+
+    wel2.options.tabfiles = False
+    wel2.phiramp = 0.4
+
+    wel2.write_file(os.path.join(cpth, wel_name2))
+    ml.remove_package("WEL")
+
+    wel3 = flopy.modflow.ModflowWel.load(os.path.join(cpth, wel_name2),
+                                         ml, nper=2, ext_unit_dict={},
+                                         check=False)
+
+    assert not wel3.options.tabfiles
+    assert wel3.options.phiramp == 0.4
+    assert wel3.options.noprint
+
+
+def test_load_write_wel_option_line():
+    ws = os.path.join("..", "examples", "data", "options")
+    wel_name = "sagehen.wel"
+
+    # test with modflow-nwt
+    ml = flopy.modflow.Modflow(modelname="optionblock",
+                               version='mfnwt', verbose=False)
+
+    wel = flopy.modflow.ModflowWel.load(os.path.join(ws, wel_name),
+                                        ml, nper=2, ext_unit_dict={},
+                                        check=False)
+
+    assert wel.options.noprint
+    assert wel.specify
+    assert wel.phiramp - 0.1 < 0.0001
+    assert wel.iunitramp == 10
+
+    wel.iunitramp = 20
+    wel_name2 = "sagehen2.wel"
+    wel.write_file(os.path.join(cpth, wel_name2))
+    ml.remove_package("WEL")
+
+    wel2 = flopy.modflow.ModflowWel.load(os.path.join(cpth, wel_name2),
+                                         ml, nper=2, ext_unit_dict={},
+                                         check=False)
+
+    assert wel.options.noprint
+    assert wel.specify
+    assert wel.phiramp - 0.1 < 0.0001
+    assert wel.iunitramp == 20
+
 
 if __name__ == '__main__':
     test_create()
     test_load_and_write()
+    test_read_write_nwt_options()
+    test_load_write_sfr_option_block()
+    test_load_write_sfr_option_line()
+    test_load_write_uzf_option_block()
+    test_load_write_uzf_option_line()
+    test_load_write_wel_option_block()
+    test_load_write_wel_option_line()
+    test_uzf_surfk()

@@ -25,7 +25,8 @@ class Mt3dRct(Package):
     ireact : int
         ireact is a flag indicating which type of kinetic rate reaction is
         simulated: ireact = 0, no kinetic rate reaction is simulated;
-        ireact = 1, first-order irreversible reaction. Note that this reaction
+        ireact = 1, first-order irreversible reaction, ireact = 100,
+        zero-order reactions (decay or production). Note that this reaction
         package is not intended for modeling chemical reactions between
         species. An add-on reaction package developed specifically for that
         purpose may be used. (default is 0).
@@ -43,7 +44,7 @@ class Mt3dRct(Package):
     rhob : float or array of floats (nlay, nrow, ncol)
         rhob is the bulk density of the aquifer medium (unit, ML-3). rhob is
         used if isothm = 1, 2, 3, 4, or 6. If rhob is not user-specified and
-        isothem is not 5 then rhob is set to 1.8e3. (default is None)
+        isothm is not 5 then rhob is set to 1.8e3. (default is None)
     prsity2 : float or array of floats (nlay, nrow, ncol)
         prsity2 is the porosity of the immobile domain (the ratio of pore
         spaces filled with immobile fluids over the bulk volume of the aquifer
@@ -107,8 +108,8 @@ class Mt3dRct(Package):
         File unit number. If file unit number is None then an unused unit
          number if used. (default is None).
 
-    **kwargs
-    --------
+    Other Parameters
+    ----------------
     srconcn : float or array of floats (nlay, nrow, ncol)
         srconcn is the user-specified initial concentration for the sorbed
         phase of species n. If srconcn is not passed as a **kwarg and
@@ -133,15 +134,6 @@ class Mt3dRct(Package):
         n. If rc2n is not passed as a **kwarg and ireact > 0 then rc2 for
         species n is set to 0. See description of rc2 for a more complete
         description of rc2n.
-    extension : string
-        Filename extension (default is 'rct')
-    unitnumber : int
-        File unit number (default is None).
-    filenames : str or list of str
-        Filenames to use for the package. If filenames=None the package name
-        will be created using the model name and package extension. If a
-        single string is passed the package will be set to the string.
-        Default is None.
 
 
     Attributes
@@ -450,13 +442,13 @@ class Mt3dRct(Package):
         if model.verbose:
             print('   loading ISOTHM, IREACT, IRCTOP, IGETSC...')
         isothm = int(line[0:10])
-        ireact = int(line[11:20])
+        ireact = int(line[10:20])
         try:
-            irctop = int(line[21:30])
+            irctop = int(line[20:30])
         except:
             irctop = 0
         try:
-            igetsc = int(line[31:40])
+            igetsc = int(line[30:40])
         except:
             igetsc = 0
         if model.verbose:

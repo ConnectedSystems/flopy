@@ -16,7 +16,7 @@ class Triangle(object):
     model_ws : str
         workspace location for creating triangle files (default is '.')
     exe_name : str
-        path and name of the triangle program. (default is triange, which
+        path and name of the triangle program. (default is triangle, which
         means that the triangle program must be in your path)
     maximum_area : float
         the maximum area for any triangle.  The default value is None, which
@@ -37,7 +37,7 @@ class Triangle(object):
         self.model_ws = model_ws
         exe_name = which(exe_name)
         if exe_name is None:
-            raise Exception('Cannot find gridgen binary executable')
+            raise Exception('Cannot find triangle binary executable')
         self.exe_name = os.path.abspath(exe_name)
         self.angle = angle
         self.maximum_area = maximum_area

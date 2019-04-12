@@ -23,7 +23,7 @@ class ModflowBcf(Package):
         (default is 53)
     intercellt : int
         Intercell transmissivities, harmonic mean (0), arithmetic mean (1),
-        logarithmetic mean (2), combination (3). (default is 0)
+        logarithmic mean (2), combination (3). (default is 0)
     laycon : int
         Layer type, confined (0), unconfined (1), constant T, variable S (2),
         variable T, variable S (default is 3)
@@ -39,7 +39,7 @@ class ModflowBcf(Package):
     iwetit : int
         iteration interval in wetting/drying algorithm (default is 1)
     ihdwet : int
-        flag to indicate how initial head is computd for cells that become
+        flag to indicate how initial head is computed for cells that become
         wet (default is 0)
     tran : float or array of floats (nlay, nrow, ncol), optional
         transmissivity (only read if laycon is 0 or 2) (default is 1.0)
@@ -133,9 +133,9 @@ class ModflowBcf(Package):
 
         nrow, ncol, nlay, nper = self.parent.nrow_ncol_nlay_nper
         # Set values of all parameters
-        self.intercellt = Util2d(model, (nlay,), np.int, intercellt,
+        self.intercellt = Util2d(model, (nlay,), np.int32, intercellt,
                                  name='laycon', locat=self.unit_number[0])
-        self.laycon = Util2d(model, (nlay,), np.int, laycon, name='laycon',
+        self.laycon = Util2d(model, (nlay,), np.int32, laycon, name='laycon',
                              locat=self.unit_number[0])
         self.trpy = Util2d(model, (nlay,), np.float32, trpy,
                            name='Anisotropy factor', locat=self.unit_number[0])
@@ -316,8 +316,8 @@ class ModflowBcf(Package):
                 lcode = lcode.replace(' ', '0')
                 t.append(lcode)
                 istart += 2
-        intercellt = np.zeros(nlay, dtype=np.int)
-        laycon = np.zeros(nlay, dtype=np.int)
+        intercellt = np.zeros(nlay, dtype=np.int32)
+        laycon = np.zeros(nlay, dtype=np.int32)
         for k in range(nlay):
             if len(t[k]) > 1:
                 intercellt[k] = int(t[k][0])
@@ -328,9 +328,8 @@ class ModflowBcf(Package):
         # TRPY array
         if model.verbose:
             print('   loading TRPY...')
-        trpy = Util2d.load(f, model, (1, nlay), np.float32, 'trpy',
+        trpy = Util2d.load(f, model, (nlay,), np.float32, 'trpy',
                            ext_unit_dict)
-        trpy = trpy.array.reshape((nlay))
 
         # property data for each layer based on options
         transient = not dis.steady.all()

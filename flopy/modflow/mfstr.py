@@ -66,7 +66,7 @@ class ModflowStr(Package):
         datasets 6 and 8.
 
         The value for stress period data for a stress period can be an integer
-        (-1 or 0), a list of lists, a numpy array, or a numpy recarry. If
+        (-1 or 0), a list of lists, a numpy array, or a numpy recarray. If
         stress period data for a stress period contains an integer, a -1 denotes
         data from the previous stress period will be reused and a 0 indicates
         there are no str reaches for this stress period.
@@ -119,7 +119,7 @@ class ModflowStr(Package):
         a integer value is specified for stress period data.
 
         The value for segment data for a stress period can be an integer
-        (-1 or 0), a list of lists, a numpy array, or a numpy recarry. If
+        (-1 or 0), a list of lists, a numpy array, or a numpy recarray. If
         segment data for a stress period contains an integer, a -1 denotes
         data from the previous stress period will be reused and a 0 indicates
         there are no str segments for this stress period.
@@ -373,12 +373,14 @@ class ModflowStr(Package):
 
     @staticmethod
     def get_empty(ncells=0, nss=0, aux_names=None, structured=True):
-        # get an empty recarray that correponds to dtype
+        # get an empty recarray that corresponds to dtype
         dtype, dtype2 = ModflowStr.get_default_dtype(structured=structured)
         if aux_names is not None:
             dtype = Package.add_to_dtype(dtype, aux_names, np.float32)
+        #return (create_empty_recarray(ncells, dtype=dtype, default_value=-1.0E+10),
+        #        create_empty_recarray(nss, dtype=dtype, default_value=0))
         return (create_empty_recarray(ncells, dtype=dtype, default_value=-1.0E+10),
-                create_empty_recarray(nss, dtype=dtype, default_value=0))
+                create_empty_recarray(nss, dtype=dtype2, default_value=0))
 
     @staticmethod
     def get_default_dtype(structured=True):
@@ -497,13 +499,15 @@ class ModflowStr(Package):
                 # dataset 9
                 if self.ntrib > 0:
                     for line in sdata:
-                        for idx in range(3):
+                        #for idx in range(3):
+                        for idx in range(self.ntrib):
                             f_str.write(fmt9.format(line[idx]))
                         f_str.write('\n')
                 # dataset 10
                 if self.ndiv > 0:
                     for line in sdata:
-                        f_str.write('{:10d}\n'.format(line[3]))
+                        #f_str.write('{:10d}\n'.format(line[3]))
+                        f_str.write('{:10d}\n'.format(line[self.ntrib]))
 
         # close the str file
         f_str.close()
@@ -695,7 +699,7 @@ class ModflowStr(Package):
                             if len(aux_names) > 0:
                                 for idx, v in enumerate(t[10:]):
                                     t.append(v)
-                            if len(tt) != len(current.dtype.names) - 3:
+                            if len(tt) < len(current.dtype.names) - 3:
                                 raise Exception
                         else:
                             ipos = [5, 5, 5, 5, 5, 15, 10, 10, 10, 10]

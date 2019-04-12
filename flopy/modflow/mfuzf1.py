@@ -4,15 +4,18 @@ the ModflowUzf1 class as `flopy.modflow.ModflowUzf1`.
 
 Additional information for this MODFLOW package can be found at the `Online
 MODFLOW Guide
-<http://water.usgs.gov/ogw/modflow/MODFLOW-2005-Guide/uzf___unsaturated_zone_flow_pa_3.htm>`_.
+<https://water.usgs.gov/nrp/gwsoftware/modflow2000/MFDOC/index.html?uzf_unsaturated_zone_flow_pack.htm>`_.
 
 """
 
 import sys
 import numpy as np
-from ..utils.flopy_io import pop_item, line_parse, read_nwt_options
+from ..utils.flopy_io import pop_item, line_parse
 from ..pakbase import Package
 from ..utils import Util2d, Transient2d
+from ..utils.optionblock import OptionBlock
+from collections import OrderedDict
+import warnings
 
 
 class ModflowUzf1(Package):
@@ -136,6 +139,15 @@ class ModflowUzf1(Package):
             followed by a series of depths and water contents in the
             unsaturated zone.
 
+    nwt_11_fmt : boolean
+        flag indicating whether or not to utilize a newer (MODFLOW-NWT
+        version 1.1 or later) format style, i.e., uzf1 optional variables 
+        appear line-by-line rather than in a specific order on a single
+        line. True means that optional variables (e.g., SPECIFYTHTR,
+        SPECIFYTHTI, NOSURFLEAK) appear on new lines. True also supports 
+        a number of newer optional variables (e.g., SPECIFYSURFK,
+        REJECTSURFK, SEEPSURFK). False means that optional variables 
+        appear on one line.  (default is False)
     specifythtr : boolean
         key word for specifying optional input variable THTR (default is 0)
     specifythti : boolean
@@ -146,7 +158,7 @@ class ModflowUzf1(Package):
     specifysurfk : boolean
         (MODFLOW-NWT version 1.1 and MODFLOW-2005 1.12 or later) 
         An optional character variable. When SPECIFYSURFK is specified, 
-        the variable SURFK is specfied in Data Set 4b.
+        the variable SURFK is specified in Data Set 4b.
     rejectsurfk : boolean
         (MODFLOW-NWT version 1.1 and MODFLOW-2005 1.12 or later) 
         An optional character variable. When REJECTSURFK is specified, 
@@ -168,7 +180,7 @@ class ModflowUzf1(Package):
         for smoothfact (default is None).
         For example, if the interval factor (smoothfact) 
         is specified as smoothfact=0.1 (recommended), 
-        then the smoothing inerval will be calculated as: 
+        then the smoothing interval will be calculated as: 
         SMOOTHINT = 0.1*EXTDP and  is applied over the range for groundwater head (h):
         *   h < CELTOP-EXTDP, ET is zero;
         *   CELTOP-EXTDP < h < CELTOP-EXTDP+SMOOTHINT, ET is smoothed;
@@ -259,14 +271,19 @@ class ModflowUzf1(Package):
         name with the appropriate output file extensions. To define the names
         for all package files (input and output) the length of the list of
         strings should be 3 + len(uzgag). Default is None.
+    surfk : float
+        An optional array of positive real values used to define the hydraulic
+        conductivity (LT-1). SURFK is used for calculating the rejected
+        infiltration and/or surface leakage. IF SURFK is set greater than
+        VKS then it is set equal to VKS. Only used if SEEPSURFK is True.
 
     Attributes
     ----------
-    nuzgag : integer
+    nuzgag : integer (deprecated - counter is set based on length of uzgage)
         equal to the number of cells (one per vertical column) that will be
         specified for printing detailed information on the unsaturated zone
         water budget and water content. A gage also may be used to print
-        the budget summed over all model cells.  (default is 0)
+        the budget summed over all model cells.  (default is None)
 
     Methods
     -------
@@ -286,6 +303,35 @@ class ModflowUzf1(Package):
     >>> uzf = flopy.modflow.ModflowUzf1(ml, ...)
 
     """
+    _options = OrderedDict([('specifythtr',
+                             OptionBlock.simple_flag),
+                            ('specifythti',
+                             OptionBlock.simple_flag),
+                            ('nosurfleak',
+                             OptionBlock.simple_flag),
+                            ('specifysurfk',
+                             OptionBlock.simple_flag),
+                            ('rejectsurfk',
+                             OptionBlock.simple_flag),
+                            ("seepsurfk",
+                             OptionBlock.simple_flag),
+                            ("etsquare",
+                                {OptionBlock.dtype: np.bool_,
+                                 OptionBlock.nested: True,
+                                 OptionBlock.n_nested: 1,
+                                 OptionBlock.vars:
+                                     {"smoothfact":
+                                      OptionBlock.simple_float}}),
+                            ("netflux",
+                                {OptionBlock.dtype: np.bool_,
+                                 OptionBlock.nested: True,
+                                 OptionBlock.n_nested: 2,
+                                 OptionBlock.vars:
+                                     OrderedDict([("unitrech",
+                                                   OptionBlock.simple_int),
+                                                  ("unitdis",
+                                                   OptionBlock.simple_int)])}),
+                            ("savefinf", OptionBlock.simple_flag)])
 
     def __init__(self, model,
                  nuztop=1, iuzfopt=0, irunflg=0, ietflg=0, ipakcb=None,
@@ -297,9 +343,10 @@ class ModflowUzf1(Package):
                  finf=1.0E-8, pet=5.0E-8, extdp=15.0, extwc=0.1,
                  nwt_11_fmt=False,
                  specifysurfk=False, rejectsurfk=False, seepsurfk=False,
-                 etsquare=None, netflux=None,
+                 etsquare=None, netflux=None, nuzgag=None,
                  uzgag=None, extension='uzf', unitnumber=None,
-                 filenames=None):
+                 filenames=None, options=None, surfk=0.1):
+
         # set default unit number of one is not specified
         if unitnumber is None:
             unitnumber = ModflowUzf1.defaultunit()
@@ -387,6 +434,11 @@ class ModflowUzf1(Package):
         self.url = 'uzf_unsaturated_zone_flow_pack.htm'
 
         # Data Set 1a
+        if nwt_11_fmt:
+            warnings.warn("nwt_11_fmt has been deprecated,"
+                          " and will be removed in the next release"
+                          " please provide a flopy.utils.OptionBlock object"
+                          " to the options argument", DeprecationWarning)
         self.nwt_11_fmt = nwt_11_fmt
         self.specifythtr = specifythtr
         self.specifythti = specifythti
@@ -411,6 +463,15 @@ class ModflowUzf1(Package):
             self.netflux = True
             self.unitrech, self.unitdis = netflux
 
+        if options is None:
+            if (specifythti, specifythtr, nosurfleak, specifysurfk, rejectsurfk,
+                seepsurfk, self.etsquare, self.netflux) != (False, False, False,
+                                                            False, False, False,
+                                                            False, False):
+                options = OptionBlock("", ModflowUzf1, block=False)
+
+        self.options = options
+
         # Data Set 1b
         # NUZTOP IUZFOPT IRUNFLG IETFLG ipakcb IUZFCB2 [NTRAIL2 NSETS2] NUZGAG SURFDEP
         self.nuztop = nuztop
@@ -426,14 +487,14 @@ class ModflowUzf1(Package):
 
         # Data Set 2
         # IUZFBND (NCOL, NROW) -- U2DINT
-        self.iuzfbnd = Util2d(model, (nrow, ncol), np.int, iuzfbnd,
+        self.iuzfbnd = Util2d(model, (nrow, ncol), np.int32, iuzfbnd,
                               name='iuzfbnd')
 
         # If IRUNFLG > 0: Read item 3
         # Data Set 3
         # [IRUNBND (NCOL, NROW)] -- U2DINT
         if irunflg > 0:
-            self.irunbnd = Util2d(model, (nrow, ncol), np.int, irunbnd,
+            self.irunbnd = Util2d(model, (nrow, ncol), np.int32, irunbnd,
                                   name='irunbnd')
 
         # IF the absolute value of IUZFOPT = 1: Read item 4.
@@ -441,6 +502,10 @@ class ModflowUzf1(Package):
         # [VKS (NCOL, NROW)] -- U2DREL
         if abs(iuzfopt) in [0, 1]:
             self.vks = Util2d(model, (nrow, ncol), np.float32, vks, name='vks')
+
+        if seepsurfk:
+            self.surfk = Util2d(model, (nrow, ncol), np.float32, surfk, name='surfk')
+
         if iuzfopt > 0:
             # Data Set 5
             # EPS (NCOL, NROW) -- U2DREL
@@ -510,12 +575,13 @@ class ModflowUzf1(Package):
         return lst
 
     def ncells(self):
-        # Returns the  maximum number of cells that have recharge (developped for MT3DMS SSM package)
+        # Returns the  maximum number of cells that have recharge (developed for MT3DMS SSM package)
         nrow, ncol, nlay, nper = self.parent.nrow_ncol_nlay_nper
         return (nrow * ncol)
 
     def _write_1a(self, f_uzf):
 
+        # the nwt_11_fmt code is slated for removal (deprecated!)
         if not self.nwt_11_fmt:
             specify_temp = ''
             if self.specifythtr > 0:
@@ -541,7 +607,7 @@ class ModflowUzf1(Package):
             txt += 'end\n'
             f_uzf.write(txt)
 
-    def write_file(self,f=None):
+    def write_file(self, f=None):
         """
         Write the package file.
 
@@ -553,13 +619,21 @@ class ModflowUzf1(Package):
         nrow, ncol, nlay, nper = self.parent.nrow_ncol_nlay_nper
         # Open file for writing
         if f is not None:
-            f_uzf = f
+            if isinstance(f, str):
+                f_uzf = open(f, "w")
+            else:
+                f_uzf = f
         else:
             f_uzf = open(self.fn_path, 'w')
         f_uzf.write('{}\n'.format(self.heading))
 
         # Dataset 1a
-        self._write_1a(f_uzf)
+        if isinstance(self.options, OptionBlock) and self.parent.version == "mfnwt":
+            self.options.update_from_package(self)
+            self.options.write_options(f_uzf)
+
+        else:
+            self._write_1a(f_uzf)
 
         # Dataset 1b
         if self.iuzfopt > 0:
@@ -587,6 +661,11 @@ class ModflowUzf1(Package):
         # [VKS (NCOL, NROW)] -- U2DREL
         if abs(self.iuzfopt) in [0, 1]:
             f_uzf.write(self.vks.get_file_entry())
+
+        # Dataset 4b modflow 2005 v. 1.12 and modflow-nwt v. 1.1
+        if self.seepsurfk:
+            f_uzf.write(self.surfk.get_file_entry())
+
         if self.iuzfopt > 0:
             # Data Set 5
             # EPS (NCOL, NROW) -- U2DREL
@@ -685,9 +764,35 @@ class ModflowUzf1(Package):
         # determine problem dimensions
         nrow, ncol, nlay, nper = model.get_nrow_ncol_nlay_nper()
         # dataset 1a
-        if 'options' in line:
-            line = read_nwt_options(f)
-        specifythtr, specifythti, nosurfleak = _parse1a(line)
+        specifythtr, specifythti, nosurfleak = False, False, False
+        etsquare, netflux, rejectsurfk, seepsurfk = None, None, False, False
+        options = None
+        if model.version == 'mfnwt' and 'options' in line.lower():
+            options = OptionBlock.load_options(f, ModflowUzf1)
+            line = f.readline()
+
+        else:
+            query = ("specifythtr", "specifythti", "nosurfleak",
+                     "specifysurfk", "rejectsurfk", "seepsurfk",
+                     "etsquare", "netflux", "savefinf")
+            for i in query:
+                if i in line.lower():
+                    options = OptionBlock(line.lower().strip(),
+                                          ModflowUzf1, block=False)
+                    line = f.readline()
+                    break
+
+        if options is not None:
+            specifythtr = options.specifythtr
+            specifythti = options.specifythti
+            nosurfleak = options.nosurfleak
+            rejectsurfk = options.rejectsurfk
+            seepsurfk = options.seepsurfk
+
+            if options.etsquare:
+                etsquare = options.smoothfact
+            if options.netflux:
+                netflux = [options.unitrech, options.unitdis]
 
         # dataset 1b
         nuztop, iuzfopt, irunflg, ietflg, ipakcb, iuzfcb2, \
@@ -710,15 +815,19 @@ class ModflowUzf1(Package):
                                            ext_unit_dict)
 
         # dataset 2
-        load_util2d('iuzfbnd', np.int)
+        load_util2d('iuzfbnd', np.int32)
 
         # dataset 3
         if irunflg > 0:
-            load_util2d('irunbnd', np.int)
+            load_util2d('irunbnd', np.int32)
 
         # dataset 4
         if iuzfopt in [0, 1]:
             load_util2d('vks', np.float32)
+
+        # dataset 4b
+        if seepsurfk:
+            load_util2d('surfk', np.float32)
 
         if iuzfopt > 0:
             # dataset 5
@@ -812,8 +921,11 @@ class ModflowUzf1(Package):
                            ntrail2=ntrail2, nsets=nsets2,
                            surfdep=surfdep, uzgag=uzgag,
                            specifythtr=specifythtr, specifythti=specifythti,
-                           nosurfleak=nosurfleak, unitnumber=unitnumber,
-                           filenames=filenames, **arrays)
+                           nosurfleak=nosurfleak, etsquare=etsquare,
+                           netflux=netflux, seepsurfk=seepsurfk,
+                           rejectsurfk=rejectsurfk,
+                           unitnumber=unitnumber,
+                           filenames=filenames, options=options, **arrays)
 
     @staticmethod
     def ftype():

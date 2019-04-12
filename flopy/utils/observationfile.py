@@ -3,6 +3,7 @@ import numpy as np
 
 from ..utils.utils_def import FlopyBinaryData
 
+
 class ObsFiles(FlopyBinaryData):
     def __init__(self):
         super(ObsFiles, self).__init__()
@@ -171,9 +172,9 @@ class ObsFiles(FlopyBinaryData):
             import pandas as pd
             from ..utils.utils_def import totim_to_datetime
         except Exception as e:
-            raise Exception(
-                    "ObsFiles.get_dataframe() error import pandas: " + \
-                    str(e))
+            msg = "ObsFiles.get_dataframe() error import pandas: " + str(e)
+            raise ImportError(msg)
+
         i0 = 0
         i1 = self.data.shape[0]
         if totim is not None:
@@ -519,7 +520,7 @@ def get_selection(data, names):
 
     Returns
     -------
-    out : numpy recarry
+    out : numpy recarray
         recarray with selection
 
     """

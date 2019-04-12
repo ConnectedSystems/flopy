@@ -1,6 +1,5 @@
 # Remove the temp directory and then create a fresh one
 import os
-import platform
 import shutil
 import subprocess
 
@@ -28,46 +27,9 @@ def get_Notebooks(dpth):
     return [f for f in os.listdir(dpth) if f.endswith('.ipynb')]
 
 
-def get_jupyter_kernel():
-    try:
-        # determine available jupyter kernels
-        jklcmd = ('jupyter', 'kernelspec', 'list')
-        b = subprocess.Popen(jklcmd,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT).communicate()[0]
-        if isinstance(b, bytes):
-            b = b.decode('utf-8')
-        print(b)
-        # determine current buildstat branch
-        for line in b.splitlines():
-            if 'python' in line:
-                kernel = line.split()[0]
-    except:
-        kernel = None
-
-    return kernel
-    
-
 def run_notebook(dpth, fn):
-    # only run notebook autotests on released versions of python 3.6
-    pvstr = platform.python_version()
-    if '3.6.' not in pvstr and '+' not in pvstr:
-        print('skipping...{} on python {}'.format(fn, pvstr))
-        return
-    
-    # determine jupyter kernel
-    kernel = get_jupyter_kernel()
-    print('available jupyter kernel {}'.format(kernel))
-    
     # run autotest on each notebook
     pth = os.path.join(dpth, fn)
-#    cmd = 'jupyter ' + 'nbconvert ' + \
-#          '--ExecutePreprocessor.kernel_name={} '.format(kernel) + \
-#          '--ExecutePreprocessor.timeout=600 ' + \
-#          '--to ' + 'notebook ' + \
-#          '--execute ' + '{} '.format(pth) + \
-#          '--output-dir ' + '{} '.format(testdir) + \
-#          '--output ' + '{}'.format(fn)
     cmd = 'jupyter ' + 'nbconvert ' + \
           '--ExecutePreprocessor.timeout=600 ' + \
           '--to ' + 'notebook ' + \

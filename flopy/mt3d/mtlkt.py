@@ -1,10 +1,11 @@
-__author__ = 'emorway'
 
 import sys
 import numpy as np
 
 from ..pakbase import Package
-from ..utils import Util2d, read1d, MfList
+from ..utils import Util2d, MfList
+
+__author__ = 'emorway'
 
 
 class Mt3dLkt(Package):
@@ -56,7 +57,7 @@ class Mt3dLkt(Package):
                the LAK input via the RNF variable appearing in record set 9a 
                and want to assign a non-zero concentration (default is zero) 
                associated with this specified source, use ISFBCTYP=2;
-           3   a Pump boundary condition.  Users who specify a withdrawl
+           3   a Pump boundary condition.  Users who specify a withdrawal
                from a lake via the WTHDRW variable appearing in record set 9a 
                and want to assign a non-zero concentration (default is zero) 
                associated with this specified source, use ISFBCTYP=2;
@@ -164,16 +165,13 @@ class Mt3dLkt(Package):
         self.ietlak = ietlak
 
         # Set initial lake concentrations
-        if coldlak is not None:
-            self.coldlak = Util2d(self.parent, (nlkinit,), np.float32, coldlak,
-                                  name='coldlak', locat=self.unit_number[0],
-                                  array_free_format=False, iprn=iprn)
-        else:
-            self.coldlak = Util2d(self.parent, (nlkinit,), np.float32, 0.0,
-                                  name='coldlak', locat=self.unit_number[0],
-                                  array_free_format=False, iprn=iprn)
+        self.coldlak = []
+        u2d = Util2d(self.parent, (nlkinit,), np.float32, coldlak,
+               name='coldlak', locat=self.unit_number[0],
+               array_free_format=False, iprn=iprn)
+        self.coldlak.append(u2d)
 
-        # handle the miult
+        # next, handle multi-species when appropriate
         if ncomp > 1:
             for icomp in range(2, ncomp + 1):
                 for base_name, attr in zip(["coldlak"], [self.coldlak]):
@@ -187,7 +185,7 @@ class Mt3dLkt(Package):
                     u2d = Util2d(model, (nlkinit,), np.float32, val,
                            name=name, locat=self.unit_number[0],
                            array_free_format=model.free_format)
-                    attr.append(u2d)
+                    self.coldlak.append(u2d)
 
         # Set transient data
         if dtype is not None:
@@ -200,6 +198,11 @@ class Mt3dLkt(Package):
         else:
             self.lk_stress_period_data = MfList(self, model=model,
                                                 data=lk_stress_period_data)
+
+        # Check to make sure that all kwargs have been consumed
+        if len(list(kwargs.keys())) > 0:
+            raise Exception("LKT error: unrecognized kwargs: " +
+                            ' '.join(list(kwargs.keys())))
 
         self.parent.add_package(self)
         return
@@ -224,7 +227,8 @@ class Mt3dLkt(Package):
                     '# NLKINIT, MXLKBC, ICBCLK, IETLAK\n')
 
         # Item 2
-        f_lkt.write(self.coldlak.get_file_entry())
+        for s in range(len(self.coldlak)):
+            f_lkt.write(self.coldlak[s].get_file_entry())
 
         # Items 3-4
         # (Loop through each stress period and write LKT information)
@@ -235,7 +239,7 @@ class Mt3dLkt(Package):
 
             # List of concentrations associated with fluxes in/out of lake
             # (Evap, precip, specified runoff into the lake, specified
-            # withdrawl directly from the lake
+            # withdrawal directly from the lake
             if self.lk_stress_period_data is not None:
                 self.lk_stress_period_data.write_transient(f_lkt,
                                                            single_per=kper)
@@ -313,10 +317,7 @@ class Mt3dLkt(Package):
         # Item 1 (NLKINIT,MXLKBC,ICBCLK,IETLAK)
         line = f.readline()
         if line[0] == '#':
-            if model.verbose:
-                print(
-                    '   LKT package currently does not support comment lines...')
-                sys.exit()
+            raise ValueError('LKT package does not support comment lines')
 
         if model.verbose:
             print('   loading nlkinit,mxlkbc,icbclk,ietlak   ')
@@ -349,16 +350,16 @@ class Mt3dLkt(Package):
                     print('   Using historic MT3DMS array reader utilities to ' \
                           'read COLDLAK')
 
-        coldlak = Util2d.load(f, model, (1, nlkinit), np.float32, 'coldlak1',
+        kwargs = {}
+        coldlak = Util2d.load(f, model, (nlkinit,), np.float32, 'coldlak1',
                               ext_unit_dict, array_format=model.array_format)
 
-        kwargs = {}
         if ncomp > 1:
             for icomp in range(2, ncomp + 1):
                 name = "coldlak" + str(icomp)
                 if model.verbose:
                     print('   loading {}...'.format(name))
-                u2d = Util2d.load(f, model, (1,nlkinit), np.float32,
+                u2d = Util2d.load(f, model, (nlkinit,), np.float32,
                                   name, ext_unit_dict, array_format=model.array_format)
                 kwargs[name] = u2d
 
@@ -399,10 +400,10 @@ class Mt3dLkt(Package):
                     t = []
                     for ivar in range(2):
                         t.append(m_arr[ivar])
-                    cbclk = len(current_sf.dtype.names) - 2
-                    if cbcsf > 0:
+                    cbclk = len(current_lk.dtype.names) - 2
+                    if cbclk > 0:
                         for ilkvar in range(cbclk):
-                            t.append(m_arr[ilkvar + 3])
+                            t.append(m_arr[ilkvar + 2])
                     current_lk[ilkbnd] = tuple(t[:len(current_lk.dtype.names)])
                 # Convert ILKBC (node) index to zero-based
                 current_lk['node'] -= 1
@@ -443,7 +444,7 @@ class Mt3dLkt(Package):
         type_list = [("node", np.int), ("ilkbctyp", np.int), \
                      ("cbclk0", np.float32)]
         if ncomp > 1:
-            for icomp in range(1, ncomp + 1):
+            for icomp in range(2, ncomp + 1):
                 comp_name = "cbclk({0:02d})".format(icomp)
                 type_list.append((comp_name, np.float32))
         dtype = np.dtype(type_list)

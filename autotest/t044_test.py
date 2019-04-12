@@ -49,12 +49,16 @@ def load_and_write_pcgn(mfnam, pth):
     m = flopy.modflow.Modflow.load(mfnam, model_ws=lpth, verbose=True,
                                    exe_name=exe_name)
     assert m.load_fail is False
+    if mfnam in ['twri.nam']:  # update this list for fixed models
+        assert m.free_format_input is False
+    else:
+        assert m.free_format_input is True
 
     if run:
         try:
             success, buff = m.run_model(silent=False)
         except:
-            pass
+            success = False
         assert success, 'base model run did not terminate successfully'
         fn0 = os.path.join(lpth, mfnam)
 
@@ -65,7 +69,7 @@ def load_and_write_pcgn(mfnam, pth):
         try:
             success, buff = m.run_model(silent=False)
         except:
-            pass
+            success = False
         assert success, 'new model run did not terminate successfully'
         fn1 = os.path.join(apth, mfnam)
 
@@ -74,8 +78,9 @@ def load_and_write_pcgn(mfnam, pth):
                             '{}.head.out'.format(os.path.splitext(mfnam)[0]))
         success = False
         try:
-            success = pymake.compare_heads(fn0, fn1, outfile=fsum)
+            success = pymake.compare_heads(fn0, fn1, outfile=fsum, htol=0.005)
         except:
+            success = False
             print('could not perform head comparison')
 
         assert success, 'head comparison failure'
@@ -88,6 +93,7 @@ def load_and_write_pcgn(mfnam, pth):
                                             max_incpd=0.1, max_cumpd=0.1,
                                             outfile=fsum)
         except:
+            success = False
             print('could not perform budget comparison')
 
         assert success, 'budget comparison failure'

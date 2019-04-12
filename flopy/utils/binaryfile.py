@@ -1,8 +1,9 @@
 """
-Module to read MODFLOW binary output files.  The module contains three
+Module to read MODFLOW binary output files.  The module contains four
 important classes that can be accessed by the user.
 
 *  HeadFile (Binary head file.  Can also be used for drawdown)
+*  HeadUFile (Binary MODFLOW-USG unstructured head file)
 *  UcnFile (Binary concentration file from MT3DMS)
 *  CellBudgetFile (Binary cell-by-cell flow file)
 
@@ -95,7 +96,7 @@ class BinaryHeader(Header):
         return header.get_values()
 
 
-def binaryread_struct(file, vartype, shape=(1, ), charlen=16):
+def binaryread_struct(file, vartype, shape=(1,), charlen=16):
     """
     Read text, a scalar value, or an array of values from a binary file.
         file : file object
@@ -140,7 +141,7 @@ def binaryread_struct(file, vartype, shape=(1, ), charlen=16):
     return result
 
 
-def binaryread(file, vartype, shape=(1, ), charlen=16):
+def binaryread(file, vartype, shape=(1,), charlen=16):
     """
     Uses numpy to read from binary file.  This was found to be faster than the
         struct approach and is used as the default.
@@ -198,8 +199,16 @@ def get_headfile_precision(filename):
     for i in range(33, 127):
         asciiset += chr(i)
 
-    # first try single
+    # Open file, and check filesize to ensure this is not an empty file
     f = open(filename, 'rb')
+    f.seek(0, 2)
+    totalbytes = f.tell()
+    f.seek(0, 0)  # reset to beginning
+    assert f.tell() == 0
+    if totalbytes == 0:
+        raise IOError('datafile error: file is empty: ' + str(filename))
+
+    # first try single
     vartype = [('kstp', '<i4'), ('kper', '<i4'), ('pertim', '<f4'),
                ('totim', '<f4'), ('text', 'S16')]
     hdr = binaryread(f, vartype)
@@ -547,6 +556,13 @@ class CellBudgetFile(object):
         self.precision = precision
         self.verbose = verbose
         self.file = open(self.filename, 'rb')
+        # Get filesize to ensure this is not an empty file
+        self.file.seek(0, 2)
+        totalbytes = self.file.tell()
+        self.file.seek(0, 0)  # reset to beginning
+        assert self.file.tell() == 0
+        if totalbytes == 0:
+            raise IOError('datafile error: file is empty: ' + str(filename))
         self.nrow = 0
         self.ncol = 0
         self.nlay = 0
@@ -554,6 +570,7 @@ class CellBudgetFile(object):
         self.times = []
         self.kstpkper = []
         self.recordarray = []
+        self.iposheader = []
         self.iposarray = []
         self.textlist = []
         self.imethlist = []
@@ -646,6 +663,7 @@ class CellBudgetFile(object):
         self.recorddict = OrderedDict()
         ipos = 0
         while ipos < self.totalbytes:
+            self.iposheader.append(ipos)
             header = self._get_header()
             self.nrecords += 1
             totim = header['totim']
@@ -675,8 +693,8 @@ class CellBudgetFile(object):
                     print(itxt + ': ' + str(s))
                 print('file position: ', ipos)
                 if int(header['imeth']) != 5 and \
-                                int(header['imeth']) != 6 and \
-                                int(header['imeth']) != 7:
+                        int(header['imeth']) != 6 and \
+                        int(header['imeth']) != 7:
                     print('')
 
             # store record and byte position mapping
@@ -692,6 +710,7 @@ class CellBudgetFile(object):
 
         # convert to numpy arrays
         self.recordarray = np.array(self.recordarray, dtype=self.header_dtype)
+        self.iposheader = np.array(self.iposheader, dtype=np.int64)
         self.iposarray = np.array(self.iposarray, dtype=np.int64)
         self.nper = self.recordarray["kper"].max()
         return
@@ -741,8 +760,8 @@ class CellBudgetFile(object):
                 print('nlist: ', nlist)
                 print('')
             nbytes = nlist * (
-                np.int32(1).nbytes * 2 + self.realtype(1).nbytes +
-                naux * self.realtype(1).nbytes)
+                    np.int32(1).nbytes * 2 + self.realtype(1).nbytes +
+                    naux * self.realtype(1).nbytes)
         else:
             raise Exception('invalid method code ' + str(imeth))
         if nbytes != 0:
@@ -833,7 +852,7 @@ class CellBudgetFile(object):
         Print a list of unique record names
         """
         print('RECORD           IMETH')
-        print(22*'-')
+        print(22 * '-')
         for rec, imeth in zip(self.textlist, self.imethlist):
             if isinstance(rec, bytes):
                 rec = rec.decode()
@@ -850,29 +869,55 @@ class CellBudgetFile(object):
             print(rec)
         return
 
-    def get_unique_record_names(self):
+    def get_unique_record_names(self, decode=False):
         """
         Get a list of unique record names in the file
 
+        Parameters
+        ----------
+        decode : bool
+            Optional boolean used to decode byte strings (default is False).
+
         Returns
         ----------
-        out : list of strings
+        names : list of strings
             List of unique text names in the binary file.
 
         """
-        return self.textlist
+        if decode:
+            names = []
+            for text in self.textlist:
+                if isinstance(text, bytes):
+                    text = text.decode()
+                names.append(text)
+        else:
+            names = self.textlist
+        return names
 
-    def get_unique_package_names(self):
+    def get_unique_package_names(self, decode=False):
         """
         Get a list of unique package names in the file
 
+        Parameters
+        ----------
+        decode : bool
+            Optional boolean used to decode byte strings (default is False).
+
         Returns
         ----------
-        out : list of strings
+        names : list of strings
             List of unique package names in the binary file.
 
         """
-        return self.paknamlist
+        if decode:
+            names = []
+            for text in self.paknamlist:
+                if isinstance(text, bytes):
+                    text = text.decode()
+                names.append(text)
+        else:
+            names = self.paknamlist
+        return names
 
     def _unique_package_names(self):
         """
@@ -906,6 +951,12 @@ class CellBudgetFile(object):
         """
         Get a list of indices for a selected record name
 
+        Parameters
+        ----------
+        text : str
+            The text identifier for the record.  Examples include
+            'RIVER LEAKAGE', 'STORAGE', 'FLOW RIGHT FACE', etc.
+
         Returns
         ----------
         out : tuple
@@ -922,10 +973,37 @@ class CellBudgetFile(object):
             select_indices = None
         return select_indices
 
+    def get_position(self, idx, header=False):
+        """
+        Get the starting position of the data or header for a specified record
+        number in the binary budget file.
+
+        Parameters
+        ----------
+        idx : int
+            The zero-based record number.  The first record is record 0.
+        header : bool
+            If True, the position of the start of the header data is returned.
+            If False, the position of the start of the data is returned
+            (default is False).
+
+        Returns
+        -------
+        ipos : int64
+            The position of the start of the data in the cell budget file
+            or the start of the header.
+
+        """
+        if header:
+            ipos = self.iposheader[idx]
+        else:
+            ipos = self.iposarray[idx]
+        return ipos
+
     def get_data(self, idx=None, kstpkper=None, totim=None, text=None,
                  paknam=None, full3D=False):
         """
-        get data from the budget file.
+        Get data from the binary budget file.
 
         Parameters
         ----------
@@ -941,7 +1019,7 @@ class CellBudgetFile(object):
             'RIVER LEAKAGE', 'STORAGE', 'FLOW RIGHT FACE', etc.
         full3D : boolean
             If true, then return the record as a three dimensional numpy
-            array, even for those list-style records writen as part of a
+            array, even for those list-style records written as part of a
             'COMPACT BUDGET' MODFLOW budget file.  (Default is False.)
 
         Returns
@@ -1098,7 +1176,7 @@ class CellBudgetFile(object):
         timesint = self.get_times()
         if len(timesint) < 1:
             if times is None:
-                timesint = [x+1 for x in range(len(kk))]
+                timesint = [x + 1 for x in range(len(kk))]
             else:
                 if isinstance(times, np.ndarray):
                     times = times.tolist()
@@ -1173,7 +1251,7 @@ class CellBudgetFile(object):
             The zero-based record number.  The first record is record 0.
         full3D : boolean
             If true, then return the record as a three dimensional numpy
-            array, even for those list-style records writen as part of a
+            array, even for those list-style records written as part of a
             'COMPACT BUDGET' MODFLOW budget file.  (Default is False.)
 
         Returns
@@ -1481,7 +1559,7 @@ class CellBudgetFile(object):
 
 class HeadUFile(BinaryLayerFile):
     """
-    USG HeadUFile Class.
+    Unstructured MODFLOW-USG HeadUFile Class.
 
     Parameters
     ----------
@@ -1505,7 +1583,7 @@ class HeadUFile(BinaryLayerFile):
 
     Notes
     -----
-    The HeadFile class provides simple ways to retrieve a list of
+    The HeadUFile class provides simple ways to retrieve a list of
     head arrays from a MODFLOW-USG binary head file and time series
     arrays for one or more cells.
 
@@ -1527,14 +1605,18 @@ class HeadUFile(BinaryLayerFile):
     --------
 
     >>> import flopy.utils.binaryfile as bf
-    >>> hdobj = bf.USGHeadFile('model.hds', precision='single')
+    >>> hdobj = bf.HeadUFile('model.hds')
     >>> hdobj.list_records()
     >>> usgheads = hdobj.get_data(kstpkper=(1, 50))
+
 
     """
 
     def __init__(self, filename, text='headu', precision='auto',
                  verbose=False, **kwargs):
+        """
+        Class constructor
+        """
         self.text = text.encode()
         if precision == 'auto':
             precision = get_headfile_precision(filename)
@@ -1577,7 +1659,7 @@ class HeadUFile(BinaryLayerFile):
                 print(msg)
             self.file.seek(ipos, 0)
             data[ilay - 1] = binaryread(self.file, self.realtype,
-                                        shape=(npl, ))
+                                        shape=(npl,))
         return data
 
     def get_databytes(self, header):
@@ -1602,5 +1684,31 @@ class HeadUFile(BinaryLayerFile):
         return npl * np.int64(self.realtype(1).nbytes)
 
     def get_ts(self, idx):
-        raise NotImplementedError()
+        """
+        Get a time series from the binary HeadUFile (not implemented).
 
+        Parameters
+        ----------
+        idx : tuple of ints, or a list of a tuple of ints
+            idx can be (layer, row, column) or it can be a list in the form
+            [(layer, row, column), (layer, row, column), ...].  The layer,
+            row, and column values must be zero based.
+
+        Returns
+        ----------
+        out : numpy array
+            Array has size (ntimes, ncells + 1).  The first column in the
+            data array will contain time (totim).
+
+        See Also
+        --------
+
+        Notes
+        -----
+
+        Examples
+        --------
+
+        """
+        msg = 'HeadUFile: get_ts() is not implemented'
+        raise NotImplementedError(msg)

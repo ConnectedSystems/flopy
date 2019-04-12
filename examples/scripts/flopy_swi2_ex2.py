@@ -69,7 +69,7 @@ def run():
         for d in dirs:
             if os.path.exists(d):
                 os.rmdir(d)
-        sys.exit(1)
+        return 1
 
     # make working directories
     for d in dirs:
@@ -167,7 +167,7 @@ def run():
     zetavd2 = zobj.get_data(kstpkper=zkstpkper[-1], text='ZETASRF  2')[0]
     #
     # seawat model
-    swtexe_name = 'swt_v4'
+    swtexe_name = 'swtv4'
     modelname = 'swiex2_swt'
     print('creating...', modelname)
     swt_xmax = 300.0
@@ -371,3 +371,4 @@ def run():
 
 if __name__ == '__main__':
     success = run()
+    sys.exit(success)

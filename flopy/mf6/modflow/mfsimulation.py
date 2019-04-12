@@ -6,18 +6,17 @@ mfsimulation module.  contains the MFSimulation class
 import errno, sys, inspect
 import collections
 import os.path
-import numpy as np
-from flopy.mbase import run_model
-from flopy.mf6.mfbase import PackageContainer, MFFileMgmt, ExtFileAction, \
-                             PackageContainerType, MFDataException, \
-                             FlopyException, VerbosityLevel
-from flopy.mf6.mfmodel import MFModel
-from flopy.mf6.mfpackage import MFPackage
-from flopy.mf6.data.mfstructure import DatumType
-from flopy.mf6.data import mfstructure, mfdata
-from flopy.mf6.utils import binaryfile_utils
-from flopy.mf6.utils import mfobservation
-from flopy.mf6.modflow import mfnam, mfims, mftdis, mfgwfgnc, mfgwfmvr
+from ...mbase import run_model
+from ..mfbase import PackageContainer, MFFileMgmt, ExtFileAction, \
+                     PackageContainerType, MFDataException, FlopyException, \
+                     VerbosityLevel
+from ..mfmodel import MFModel
+from ..mfpackage import MFPackage
+from ..data.mfstructure import DatumType
+from ..data import mfstructure, mfdata
+from ..utils import binaryfile_utils
+from ..utils import mfobservation
+from ..modflow import mfnam, mfims, mftdis, mfgwfgnc, mfgwfmvr
 
 
 class SimulationDict(collections.OrderedDict):
@@ -216,17 +215,18 @@ class MFSimulation(PackageContainer):
     ----------
     sim_name : string
         name of the simulation.
-    sim_nam_file : string
-        relative to the simulation name file from the simulation working
-        folder.
     version : string
         MODFLOW version
     exe_name : string
         relative path to MODFLOW executable from the simulation working folder
     sim_ws : string
         path to simulation working folder
-    sim_tdis_file : string
-        relative path to MODFLOW TDIS file
+    verbosity_level : int
+        verbosity level of standard output
+            0 : no standard output
+            1 : standard error/warning messages with some informational messages
+            2 : verbose mode with full error/warning/informational messages.
+                this is ideal for debugging
 
     Attributes
     ----------
@@ -253,8 +253,8 @@ class MFSimulation(PackageContainer):
 
     Methods
     -------
-    load : (sim_name : string, sim_name_file : string, version : string,
-            exe_name : string, sim_ws : string, strict : boolean,
+    load : (sim_name : string, version : string, exe_name : string,
+            sim_ws : string, strict : boolean,
             verbosity_level : VerbosityLevel) :
             MFSimulation
         a class method that loads a simulation from files
@@ -295,8 +295,11 @@ class MFSimulation(PackageContainer):
 
     """
     def __init__(self, sim_name='sim', version='mf6',
-                 exe_name='mf6.exe', sim_ws='.'):
+                 exe_name='mf6.exe', sim_ws='.',
+                 verbosity_level=1):
         super(MFSimulation, self).__init__(MFSimulationData(sim_ws), sim_name)
+        self.simulation_data.verbosity_level = self._resolve_verbosity_level(
+            verbosity_level)
         # verify metadata
         fpdata = mfstructure.MFStructure()
         if not fpdata.valid:
@@ -308,8 +311,8 @@ class MFSimulation(PackageContainer):
         self.dimensions = None
         self.type = 'Simulation'
 
-        self._version = version
-        self._exe_name = exe_name
+        self.version = version
+        self.exe_name = exe_name
         self._models = collections.OrderedDict()
         self._tdis_file = None
         self._exchange_files = collections.OrderedDict()
@@ -326,17 +329,18 @@ class MFSimulation(PackageContainer):
         self.simulation_data.mfpath.set_last_accessed_path()
 
         # build simulation name file
-        self.name_file = mfnam.ModflowNam(self, fname='mfsim.nam')
+        self.name_file = mfnam.ModflowNam(self, filename='mfsim.nam')
 
         # try to build directory structure
-        try:
-            os.makedirs(self.simulation_data.mfpath.get_sim_path())
-        except OSError as e:
-            if e.errno == errno.EEXIST and \
-                self.simulation_data.verbosity_level.value >= \
-                    VerbosityLevel.normal.value:
-                print('Directory structure already exists for simulation path '
-                      '{}'.format(self.simulation_data.mfpath.get_sim_path()))
+        sim_path = self.simulation_data.mfpath.get_sim_path()
+        if not os.path.isdir(sim_path):
+            try:
+                os.makedirs(sim_path)
+            except OSError as e:
+                if self.simulation_data.verbosity_level.value >= \
+                        VerbosityLevel.quiet.value:
+                    print('An error occurred when trying to create the '
+                          'directory {}: {}'.format(sim_path, e.strerror))
 
         # set simulation validity initially to false since the user must first
         # add at least one model to the simulation and fill out the name and
@@ -361,7 +365,17 @@ class MFSimulation(PackageContainer):
             :class:flopy6.mfpackage
 
         """
-        if item in self._models:
+
+        models = []
+        if item in self.structure.model_types:
+            # get all models of this type
+            for model in self._models.values():
+                if model.model_type == item:
+                    models.append(model)
+
+        if len(models) > 0:
+            return models
+        elif item in self._models:
             return self.get_model(item)
         else:
             return self.get_package(item)
@@ -376,9 +390,9 @@ class MFSimulation(PackageContainer):
         file_mgt = self.simulation_data.mfpath
         data_str = 'sim_name = {}\nsim_path = {}\nexe_name = ' \
                    '{}\n\n'.format(self.name, file_mgt.get_sim_path(),
-                                   self._exe_name)
+                                   self.exe_name)
 
-        for package in self.packagelist:
+        for package in self._packagelist:
             pk_str = package._get_data_str(formal, False)
             if formal:
                 if len(pk_str.strip()) > 0:
@@ -407,9 +421,16 @@ class MFSimulation(PackageContainer):
                                '{}\n'.format(data_str, model.name, mod_str)
         return data_str
 
+    @property
+    def model_names(self):
+        """
+        Returns a list of model names associated with this simulation
+        """
+        return self._models.keys()
+
     @classmethod
     def load(cls, sim_name='modflowsim', version='mf6', exe_name='mf6.exe',
-             sim_ws='.', strict=True, verbosity_level=VerbosityLevel.normal):
+             sim_ws='.', strict=True, verbosity_level=1):
         """
         Load an existing model.
 
@@ -417,9 +438,6 @@ class MFSimulation(PackageContainer):
         ----------
         sim_name : string
             name of the simulation.
-        sim_nam_file : string
-            relative to the simulation name file from the simulation working
-            folder.
         version : string
             MODFLOW version
         exe_name : string
@@ -429,8 +447,13 @@ class MFSimulation(PackageContainer):
             path to simulation working folder
         strict : boolean
             strict enforcement of file formatting
-        verbosity_level : VerbosityLevel
-            verbosity level of console output messages
+        verbosity_level : int
+            verbosity level of standard output
+                0 : no standard output
+                1 : standard error/warning messages with some informational
+                    messages
+                2 : verbose mode with full error/warning/informational
+                    messages.  this is ideal for debugging
         Returns
         -------
         sim : MFSimulation object
@@ -440,8 +463,8 @@ class MFSimulation(PackageContainer):
         >>> s = flopy6.mfsimulation.load('my simulation')
         """
         # initialize
-        instance = cls(sim_name, version, exe_name, sim_ws)
-        instance.simulation_data.verbosity_level = verbosity_level
+        instance = cls(sim_name, version, exe_name, sim_ws, verbosity_level)
+        verbosity_level = instance.simulation_data.verbosity_level
 
         if verbosity_level.value >= VerbosityLevel.normal.value:
             print('loading simulation...')
@@ -456,9 +479,9 @@ class MFSimulation(PackageContainer):
                                    get_version_string())
         tdis_attr = getattr(instance.name_file, tdis_pkg)
         instance._tdis_file = mftdis.ModflowTdis(instance,
-                                                 fname=tdis_attr.get_data())
+                                                 filename=tdis_attr.get_data())
 
-        instance._tdis_file.filename = instance.simulation_data.mfdata[
+        instance._tdis_file._filename = instance.simulation_data.mfdata[
             ('nam', 'timing', tdis_pkg)].get_data()
         if verbosity_level.value >= VerbosityLevel.normal.value:
             print('  loading tdis package...')
@@ -476,7 +499,6 @@ class MFSimulation(PackageContainer):
                                   model=instance.name,
                                   package='nam',
                                   message=message)
-
         for item in models:
             # resolve model working folder and name file
             path, name_file = os.path.split(item[1])
@@ -545,7 +567,7 @@ class MFSimulation(PackageContainer):
                 exchange_file = package_obj(instance, exgtype=exgfile[0],
                                             exgmnamea=exgfile[2],
                                             exgmnameb=exgfile[3],
-                                            fname=exgfile[1],
+                                            filename=exgfile[1],
                                             pname=exchange_name,
                                             loading_package=True)
                 if verbosity_level.value >= VerbosityLevel.normal.value:
@@ -561,7 +583,7 @@ class MFSimulation(PackageContainer):
                                                              )]
 
         try:
-            solution_groups = solution_recarray.get_data()
+            solution_group_list = solution_recarray.get_data()
         except MFDataException as mfde:
             message = 'Error occurred while loading solution groups from ' \
                       'the simulation name file.'
@@ -569,13 +591,14 @@ class MFSimulation(PackageContainer):
                                   model=instance.name,
                                   package='nam',
                                   message=message)
-        for solution_info in solution_groups:
-            ims_file = mfims.ModflowIms(instance, fname=solution_info[1],
-                                        pname=solution_info[2])
-            if verbosity_level.value >= VerbosityLevel.normal.value:
-                print('  loading ims package {}..'
-                      '.'.format(ims_file._get_pname()))
-            ims_file.load(strict)
+        for solution_group in solution_group_list:
+            for solution_info in solution_group:
+                ims_file = mfims.ModflowIms(instance, filename=solution_info[1],
+                                            pname=solution_info[2])
+                if verbosity_level.value >= VerbosityLevel.normal.value:
+                    print('  loading ims package {}..'
+                          '.'.format(ims_file._get_pname()))
+                ims_file.load(strict)
 
         instance.simulation_data.mfpath.set_last_accessed_path()
         return instance
@@ -614,7 +637,7 @@ class MFSimulation(PackageContainer):
                     package_abbr = 'GWF'
                 # build package name and package
                 gnc_name = '{}-GNC_{}'.format(package_abbr, self._gnc_file_num)
-                ghost_node_file = mfgwfgnc.ModflowGwfgnc(self, fname=fname,
+                ghost_node_file = mfgwfgnc.ModflowGwfgnc(self, filename=fname,
                                                          pname=gnc_name,
                                                          parent_file=
                                                          parent_package,
@@ -622,6 +645,7 @@ class MFSimulation(PackageContainer):
                 ghost_node_file.load(strict)
                 self._ghost_node_files[fname] = ghost_node_file
                 self._gnc_file_num += 1
+                return ghost_node_file
         elif ftype == 'mvr':
             if fname not in self._mover_files:
                 # Get package type from parent package
@@ -631,17 +655,18 @@ class MFSimulation(PackageContainer):
                     package_abbr = 'GWF'
                 # build package name and package
                 mvr_name = '{}-MVR_{}'.format(package_abbr, self._mvr_file_num)
-                mover_file = mfgwfmvr.ModflowGwfmvr(self, fname=fname,
+                mover_file = mfgwfmvr.ModflowGwfmvr(self, filename=fname,
                                                     pname=mvr_name,
                                                     parent_file=parent_package,
                                                     loading_package=True)
                 mover_file.load(strict)
                 self._mover_files[fname] = mover_file
                 self._mvr_file_num += 1
+                return mover_file
         else:
             # create package
             package_obj = self.package_factory(ftype, '')
-            package = package_obj(self, fname=fname, pname=dict_package_name,
+            package = package_obj(self, filename=fname, pname=dict_package_name,
                                   add_to_package_list=False,
                                   parent_file=parent_package,
                                   loading_package=True)
@@ -660,6 +685,7 @@ class MFSimulation(PackageContainer):
                         VerbosityLevel.normal.value:
                     print('WARNING: Unsupported file type {} for '
                           'simulation.'.format(package.package_type))
+            return package
 
     def register_ims_package(self, ims_file, model_list):
         """
@@ -891,7 +917,7 @@ class MFSimulation(PackageContainer):
 
     def run_simulation(self, silent=None, pause=False, report=False,
                        normal_msg='normal termination',
-                       async=False, cargs=None):
+                       use_async=False, cargs=None):
         """
         Run the simulation.
         """
@@ -901,10 +927,10 @@ class MFSimulation(PackageContainer):
                 silent = False
             else:
                 silent = True
-        return run_model(self._exe_name, None,
+        return run_model(self.exe_name, None,
                          self.simulation_data.mfpath.get_sim_path(),
                          silent=silent, pause=pause, report=report,
-                         normal_msg=normal_msg, async=async, cargs=cargs)
+                         normal_msg=normal_msg, use_async=use_async, cargs=cargs)
 
     def delete_output_files(self):
         """
@@ -942,8 +968,13 @@ class MFSimulation(PackageContainer):
 
             self._remove_package(package)
 
-    def get_model_itr(self):
-        return self._models.items()
+    @property
+    def model_dict(self):
+        return self._models.copy()
+
+    @property
+    def model_names(self):
+        return list(self._models.keys())
 
     def get_model(self, model_name=''):
         """
@@ -961,7 +992,6 @@ class MFSimulation(PackageContainer):
         Examples
         --------
         """
-
         return self._models[model_name]
 
     def get_exchange_file(self, filename):
@@ -1141,7 +1171,7 @@ class MFSimulation(PackageContainer):
             if package.package_name is not None:
                 pname = package.package_name.lower()
             if package.package_type.lower() == 'tdis' and self._tdis_file is \
-                    not None and self._tdis_file in self.packagelist:
+                    not None and self._tdis_file in self._packagelist:
                 # tdis package already exists. there can be only one tdis
                 # package.  remove existing tdis package
                 if self.simulation_data.verbosity_level.value >= \
@@ -1151,7 +1181,7 @@ class MFSimulation(PackageContainer):
                 self._remove_package(self._tdis_file)
             elif package.package_type.lower() == 'gnc' and \
                     package.filename in self._ghost_node_files and \
-                    self._ghost_node_files[package.filename] in self.packagelist:
+                    self._ghost_node_files[package.filename] in self._packagelist:
                 # gnc package with same file name already exists.  remove old
                 # gnc package
                 if self.simulation_data.verbosity_level.value >= \
@@ -1163,7 +1193,7 @@ class MFSimulation(PackageContainer):
                 del self._ghost_node_files[package.filename]
             elif package.package_type.lower() == 'mvr' and \
                      package.filename in self._mover_files and \
-                     self._mover_files[package.filename] in self.packagelist:
+                     self._mover_files[package.filename] in self._packagelist:
                 # mvr package with same file name already exists.  remove old
                 # mvr package
                 if self.simulation_data.verbosity_level.value >= \
@@ -1237,6 +1267,8 @@ class MFSimulation(PackageContainer):
                 self.register_ims_package(package, None)
             return path, self.structure.package_struct_objs[
                 package.package_type.lower()]
+        else:
+            self._other_files[package.filename] = package
 
         if package.package_type.lower() in self.structure.package_struct_objs:
             return path, self.structure.package_struct_objs[
@@ -1295,6 +1327,11 @@ class MFSimulation(PackageContainer):
                                       model_name)
 
         return self.structure.model_struct_objs[model_type]
+
+    def get_ims_package(self, key):
+        if key in self._ims_files:
+            return self._ims_files[key]
+        return None
 
     def remove_model(self, model_name):
         """
@@ -1359,6 +1396,17 @@ class MFSimulation(PackageContainer):
 
         return True
 
+    @staticmethod
+    def _resolve_verbosity_level(verbosity_level):
+        if verbosity_level == 0:
+            return VerbosityLevel.quiet
+        elif verbosity_level == 1:
+            return VerbosityLevel.normal
+        elif verbosity_level == 2:
+            return VerbosityLevel.verbose
+        else:
+            return verbosity_level
+
     def _get_package_path(self, package):
         if package.parent_file is not None:
             return (package.parent_file.path) + (package.package_type,)
@@ -1372,10 +1420,8 @@ class MFSimulation(PackageContainer):
                 rec_array = solution_recarray.get_data(solution_group_num[0])
             except MFDataException as mfde:
                 message = 'An error occurred while getting solution group' \
-                          '"{}" from the simulation name file.  The error ' \
-                          'occurred while replacing IMS file "{}" with "{}"' \
-                          'at index "{}"'.format(solution_group_num[0],
-                                                 item, new_item, index)
+                          '"{}" from the simulation name file' \
+                          '.'.format(solution_group_num[0])
                 raise MFDataException(mfdata_except=mfde,
                                       package='nam',
                                       message=message)
@@ -1438,3 +1484,43 @@ class MFSimulation(PackageContainer):
                         return True
         return False
 
+
+    def plot(self, model_list=None, SelPackList=None, **kwargs):
+        """
+        Method to plot a whole simulation or a series of models
+        that are part of a simualtion
+
+        Parameters:
+            model_list: (list) list of model names to plot, if none
+                all models will be plotted
+            SelPackList: (list) list of package names to plot, if none
+                all packages will be plotted
+
+            kwargs:
+                filename_base : str
+                    Base file name that will be used to automatically generate file
+                    names for output image files. Plots will be exported as image
+                    files if file_name_base is not None. (default is None)
+                file_extension : str
+                    Valid matplotlib.pyplot file extension for savefig(). Only used
+                    if filename_base is not None. (default is 'png')
+                mflay : int
+                    MODFLOW zero-based layer number to return.  If None, then all
+                    all layers will be included. (default is None)
+                kper : int
+                    MODFLOW zero-based stress period number to return.
+                    (default is zero)
+                key : str
+                    MfList dictionary key. (default is None)
+
+
+        Returns:
+             axes: (list) matplotlib.pyplot.axes objects
+        """
+        from flopy.plot.plotutil import PlotUtilities
+
+        axes = PlotUtilities._plot_simulation_helper(self,
+                                                     model_list=model_list,
+                                                     SelPackList=SelPackList,
+                                                     **kwargs)
+        return axes

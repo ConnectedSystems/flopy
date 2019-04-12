@@ -1,10 +1,10 @@
-__author__ = 'emorway'
-
 import sys
 import numpy as np
 
 from ..pakbase import Package
 from ..utils import Util2d, MfList
+
+__author__ = 'emorway'
 
 
 class Mt3dSft(Package):
@@ -446,13 +446,10 @@ class Mt3dSft(Package):
 
         >>> import os
         >>> import flopy
-
-        >>> os.chdir(r'C:\temp\flopy_test\sfr_test')
-        >>> mf = flopy.modflow.Modflow.load('CrnkNic_mf.nam', load_only=['dis', 'bas6'])
+        >>> mf = flopy.modflow.Modflow.load('CrnkNic_mf.nam',
+        ...                                 load_only=['dis', 'bas6'])
         >>> sfr = flopy.modflow.ModflowSfr2.load('CrnkNic.sfr2', mf)
-        >>> chk = sfr.check()
-
-        >>> mt = flopy.mt3d.Mt3dms.load('CrnkNic_mt.nam', exe_name = 'mt3d-usgs_1.0.00.exe', load_only='btn')
+        >>> mt = flopy.mt3d.Mt3dms.load('CrnkNic_mt.nam', load_only='btn')
         >>> sft = flopy.mt3d.Mt3dSft.load('CrnkNic.sft', mt)
 
         """
@@ -485,10 +482,7 @@ class Mt3dSft(Package):
         # Item 1 (NSFINIT, MXSFBC, ICBCSF, IOUTOBS, IETSFR)
         line = f.readline()
         if line[0] == '#':
-            if model.verbose:
-                print('   SFT package currently does not support comment ' \
-                      'lines...')
-                sys.exit()
+            raise ValueError('SFT package does not support comment lines')
 
         if model.verbose:
             print('   loading nsfinit, mxsfbc, icbcsf, ioutobs, ietsfr...')
@@ -521,10 +515,8 @@ class Mt3dSft(Package):
 
         vals = line.strip().split()
 
-        if len(vals) < 7 and model.verbose:
-            print('   not enough values specified in item 2 of SFT input \
-                      file, exiting...')
-            sys.exit()
+        if len(vals) < 7:
+            raise ValueError('expected 7 values for item 2 of SFT input file')
         else:
             isfsolv = int(vals[0])
             wimp = float(vals[1])
@@ -559,7 +551,7 @@ class Mt3dSft(Package):
                       'read COLDSF')
 
 
-        coldsf = Util2d.load(f, model, (1, nsfinit), np.float32, 'coldsf1',
+        coldsf = Util2d.load(f, model, (np.abs(nsfinit),), np.float32, 'coldsf1',
                              ext_unit_dict, array_format=model.array_format)
 
         kwargs = {}
@@ -568,7 +560,7 @@ class Mt3dSft(Package):
                 name = "coldsf" + str(icomp)
                 if model.verbose:
                     print('   loading {}...'.format(name))
-                u2d = Util2d.load(f, model, (1,nsfinit), np.float32,
+                u2d = Util2d.load(f, model, (nsfinit,), np.float32,
                                   name, ext_unit_dict, array_format=model.array_format)
                 kwargs[name] = u2d
 
@@ -582,14 +574,14 @@ class Mt3dSft(Package):
                 print('   Using historic MT3DMS array reader utilities to ' \
                       'read DISPSF')
 
-        dispsf = Util2d.load(f, model, (1, nsfinit), np.float32, 'dispsf1',
+        dispsf = Util2d.load(f, model, (np.abs(nsfinit),), np.float32, 'dispsf1',
                              ext_unit_dict, array_format=model.array_format)
         if ncomp > 1:
             for icomp in range(2, ncomp + 1):
                 name = "dispsf" + str(icomp)
                 if model.verbose:
                     print('   loading {}...'.format(name))
-                u2d = Util2d.load(f, model, (1,nsfinit), np.float32,
+                u2d = Util2d.load(f, model, (np.abs(nsfinit),), np.float32,
                                   name, ext_unit_dict, array_format=model.array_format)
                 kwargs[name] = u2d
 

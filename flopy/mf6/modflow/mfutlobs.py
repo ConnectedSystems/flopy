@@ -16,14 +16,6 @@ class ModflowUtlobs(mfpackage.MFPackage):
     loading_package : bool
         Do not set this parameter. It is intended for debugging and internal
         processing purposes only.
-    precision : double
-        * precision (double) Keyword and precision specifier for output of
-          binary data, which can be either SINGLE or DOUBLE. The default is
-          DOUBLE. When simulated values are written to a file specified as file
-          type DATA(BINARY) in the Name File, the precision specifier controls
-          whether the data (including simulated values and, for continuous
-          observations, time values) are written as single- or double-
-          precision.
     digits : integer
         * digits (integer) Keyword and an integer digits specifier used for
           conversion of simulated values to text on output. The default is 5
@@ -56,7 +48,7 @@ class ModflowUtlobs(mfpackage.MFPackage):
           flow observations of a GWF model, for three observation types of the
           LAK Package, for two observation types of the MAW Package, and one
           observation type of the UZF Package.
-    fname : String
+    filename : String
         File name for this package.
     pname : String
         Package name for this package.
@@ -69,18 +61,16 @@ class ModflowUtlobs(mfpackage.MFPackage):
     continuous = ListTemplateGenerator(('obs', 'continuous', 
                                         'continuous'))
     package_abbr = "utlobs"
-    package_type = "obs"
+    _package_type = "obs"
     dfn_file_name = "utl-obs.dfn"
 
-    dfn = [["block options", "name precision", "type double precision", 
-            "shape", "reader urword", "optional true"],
-           ["block options", "name digits", "type integer", "shape", 
+    dfn = [["block options", "name digits", "type integer", "shape", 
             "reader urword", "optional true"],
            ["block options", "name print_input", "type keyword", 
             "reader urword", "optional true"],
            ["block continuous", "name output", 
             "type record fileout obs_output_file_name binary", "shape", 
-            "block_variable true", "in_record = false", "reader urword", 
+            "block_variable true", "in_record false", "reader urword", 
             "optional false"],
            ["block continuous", "name fileout", "type keyword", "shape", 
             "in_record true", "reader urword", "tagged true", 
@@ -104,14 +94,35 @@ class ModflowUtlobs(mfpackage.MFPackage):
             "tagged false", "in_record true", "reader urword", 
             "optional true", "numeric_index true"]]
 
-    def __init__(self, model, loading_package=False, precision=None,
-                 digits=None, print_input=None, continuous=None, fname=None,
-                 pname=None, parent_file=None):
-        super(ModflowUtlobs, self).__init__(model, "obs", fname, pname,
+    def __init__(self, model, loading_package=False, digits=None,
+                 print_input=None, continuous=None, filename=None, pname=None,
+                 parent_file=None):
+        super(ModflowUtlobs, self).__init__(model, "obs", filename, pname,
                                             loading_package, parent_file)        
 
         # set up variables
-        self.precision = self.build_mfdata("precision",  precision)
         self.digits = self.build_mfdata("digits",  digits)
         self.print_input = self.build_mfdata("print_input",  print_input)
         self.continuous = self.build_mfdata("continuous",  continuous)
+
+
+class UtlobsPackages(mfpackage.MFChildPackages):
+    """
+    UtlobsPackages is a container class for the ModflowUtlobs class.
+
+    Methods
+    ----------
+    initialize
+        Initializes a new ModflowUtlobs package removing any sibling child
+        packages attached to the same parent package. See ModflowUtlobs init
+        documentation for definition of parameters.
+    """
+    package_abbr = "utlobspackages"
+
+    def initialize(self, digits=None, print_input=None, continuous=None,
+                   filename=None, pname=None):
+        new_package = ModflowUtlobs(self._model, digits=digits,
+                                    print_input=print_input,
+                                    continuous=continuous, filename=filename,
+                                    pname=pname, parent_file=self._cpparent)
+        self._init_package(new_package, filename)

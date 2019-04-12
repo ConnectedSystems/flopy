@@ -27,24 +27,25 @@ class ModflowGwfsto(mfpackage.MFPackage):
         * iconvert (integer) is a flag for each cell that specifies whether or
           not a cell is convertible for the storage calculation. 0 indicates
           confined storage is used. :math:`>`0 indicates confined storage is
-          used when head is above cell top and unconfined storage is used when
-          head is below cell top. A mixed formulation is when when a cell
-          converts from confined to unconfined (or vice versa) during a single
-          time step.
+          used when head is above cell top and a mixed formulation of
+          unconfined and confined storage is used when head is below cell top.
     ss : [double]
         * ss (double) is specific storage (or the storage coefficient if
-          STORAGECOEFFICIENT is specified as an option).
+          STORAGECOEFFICIENT is specified as an option). Specific storage
+          values must be greater than or equal to 0.
     sy : [double]
-        * sy (double) is specific yield.
+        * sy (double) is specific yield. Specific yield values must be greater
+          than or equal to 0. Specific yield does not have to be specified if
+          there are no convertible cells (ICONVERT=0 in every cell).
     steady_state : boolean
-        * steady-state (boolean) keyword to indicate that stress-period IPER is
+        * steady-state (boolean) keyword to indicate that stress period IPER is
           steady-state. Steady-state conditions will apply until the TRANSIENT
           keyword is specified in a subsequent BEGIN PERIOD block.
     transient : boolean
-        * transient (boolean) keyword to indicate that stress-period IPER is
+        * transient (boolean) keyword to indicate that stress period IPER is
           transient. Transient conditions will apply until the STEADY-STATE
           keyword is specified in a subsequent BEGIN PERIOD block.
-    fname : String
+    filename : String
         File name for this package.
     pname : String
         Package name for this package.
@@ -59,7 +60,7 @@ class ModflowGwfsto(mfpackage.MFPackage):
     ss = ArrayTemplateGenerator(('gwf6', 'sto', 'griddata', 'ss'))
     sy = ArrayTemplateGenerator(('gwf6', 'sto', 'griddata', 'sy'))
     package_abbr = "gwfsto"
-    package_type = "sto"
+    _package_type = "sto"
     dfn_file_name = "gwf-sto.dfn"
 
     dfn = [["block options", "name save_flows", "type keyword", 
@@ -67,14 +68,14 @@ class ModflowGwfsto(mfpackage.MFPackage):
            ["block options", "name storagecoefficient", "type keyword", 
             "reader urword", "optional true"],
            ["block griddata", "name iconvert", "type integer", 
-            "shape (nodes)", "valid", "reader readarray", "optional false", 
-            "default_value 0"],
+            "shape (nodes)", "valid", "reader readarray", "layered true", 
+            "optional false", "default_value 0"],
            ["block griddata", "name ss", "type double precision", 
-            "shape (nodes)", "valid", "reader readarray", "optional false", 
-            "default_value 1.e-5"],
+            "shape (nodes)", "valid", "reader readarray", "layered true", 
+            "optional false", "default_value 1.e-5"],
            ["block griddata", "name sy", "type double precision", 
-            "shape (nodes)", "valid", "reader readarray", "optional false", 
-            "default_value 0.15"],
+            "shape (nodes)", "valid", "reader readarray", "layered true", 
+            "optional false", "default_value 0.15"],
            ["block period", "name iper", "type integer", 
             "block_variable True", "in_record true", "tagged false", "shape", 
             "valid", "reader urword", "optional false"],
@@ -85,9 +86,9 @@ class ModflowGwfsto(mfpackage.MFPackage):
 
     def __init__(self, model, loading_package=False, save_flows=None,
                  storagecoefficient=None, iconvert=0, ss=1.e-5, sy=0.15,
-                 steady_state=None, transient=None, fname=None, pname=None,
+                 steady_state=None, transient=None, filename=None, pname=None,
                  parent_file=None):
-        super(ModflowGwfsto, self).__init__(model, "sto", fname, pname,
+        super(ModflowGwfsto, self).__init__(model, "sto", filename, pname,
                                             loading_package, parent_file)        
 
         # set up variables
