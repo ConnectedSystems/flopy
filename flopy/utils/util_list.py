@@ -10,8 +10,12 @@ util_list module.  Contains the mflist class.
 from __future__ import division, print_function
 
 import os
+import sys
 import warnings
 import numpy as np
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 
 class MfList(object):
@@ -464,7 +468,7 @@ class MfList(object):
         kpers.sort()
         first = kpers[0]
         if (single_per == None):
-            loop_over_kpers = list(range(0, max(nper, max(kpers) + 1)))
+            loop_over_kpers = range(0, max(nper, max(kpers) + 1))
         else:
             if (not isinstance(single_per, list)):
                 single_per = [single_per]
@@ -514,25 +518,25 @@ class MfList(object):
             if (kper_vtype == np.recarray):
                 name = f.name
                 f.close()
+
                 f = open(name, 'ab+')
-                # print(f)
                 self.__tofile(f, kper_data)
                 f.close()
                 f = open(name, 'a')
-                # print(f)
+                
             elif (kper_vtype == str):
                 f.write("         open/close " + kper_data + '\n')
 
-    def __tofile(self, f, data):
+    def __tofile(self, f, data, idxs=['k', 'i', 'j', 'node']):
         # Write the recarray (data) to the file (or file handle) f
-        assert isinstance(data, np.recarray), "MfList.__tofile() data arg " + \
-                                              "not a recarray"
+        # assert isinstance(data, np.recarray), "MfList.__tofile() data arg " + \
+        #                                       "not a recarray"
 
         # Add one to the kij indices
         lnames = [name.lower() for name in self.dtype.names]
         # --make copy of data for multiple calls
-        d = np.recarray.copy(data)
-        for idx in ['k', 'i', 'j', 'node']:
+        d = data.copy()
+        for idx in idxs:
             if (idx in lnames):
                 d[idx] += 1
         np.savetxt(f, d, fmt=self.fmt_string, delimiter='')

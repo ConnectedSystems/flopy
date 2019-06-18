@@ -5,8 +5,12 @@ abstract classes that should not be directly accessed.
 """
 from __future__ import print_function
 import os
+import sys
 import numpy as np
 import flopy.utils
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 
 class Header(object):
@@ -324,9 +328,10 @@ class LayerFile(object):
             raise Exception('Data not found...')
 
         # initialize head with nan and then fill it
-        data = np.empty((self.nlay, self.nrow, self.ncol),
-                        dtype=self.realtype)
-        data[:, :, :] = np.nan
+        # data = np.empty((self.nlay, self.nrow, self.ncol),
+        #                 dtype=self.realtype)
+        # data[:, :, :] = np.nan
+        data = np.full((self.nlay, self.nrow, self.ncol), np.nan, dtype=self.realtype)
         for idx in keyindices:
             ipos = self.iposarray[idx]
             ilay = self.recordarray['ilay'][idx]

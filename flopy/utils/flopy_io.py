@@ -3,6 +3,10 @@ Module for input/output utilities
 """
 import numpy as np
 
+import sys
+if sys.version_info[0] < 3:
+    range = xrange
+
 def _fmt_string(array, float_format='{}'):
     """makes a formatting string for a rec-array; given a desired float_format."""
     fmt_string = ''

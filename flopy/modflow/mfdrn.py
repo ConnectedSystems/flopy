@@ -7,6 +7,7 @@ MODFLOW Guide
 <http://water.usgs.gov/ogw/modflow/MODFLOW-2005-Guide/index.html?drn.htm>`_.
 
 """
+import os
 import sys
 import numpy as np
 from ..pakbase import Package
@@ -189,18 +190,25 @@ class ModflowDrn(Package):
         None
 
         """
+        # if os.path.isfile(self.fn_path):
+        #     return
+
         if check: # allows turning off package checks when writing files at model level
             self.check(f='{}.chk'.format(self.name[0]), verbose=self.parent.verbose, level=1)
+        
+        spd = self.stress_period_data
+
         f_drn = open(self.fn_path, 'w')
-        f_drn.write('{0}\n'.format(self.heading))
+        # f_drn.write('{}\n'.format(self.heading))
         # f_drn.write('%10i%10i\n' % (self.mxactd, self.idrncb))
-        line = '{0:10d}{1:10d}'.format(self.stress_period_data.mxact, self.ipakcb)
+        line = self.heading + '\n'
+        line += '{:10d}{:10d}'.format(spd.mxact, self.ipakcb)
         for opt in self.options:
-            line += ' ' + str(opt)
+            line += ' {}'.format(str(opt))
         line += '\n'
         f_drn.write(line)
-        self.stress_period_data.write_transient(f_drn)
-        f_drn.close()
+        spd.write_transient(f_drn)
+        # f_drn.close()
 
     def add_record(self, kper, index, values):
         try:

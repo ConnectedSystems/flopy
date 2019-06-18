@@ -188,14 +188,20 @@ class ModflowGhb(Package):
         """
         if check: # allows turning off package checks when writing files at model level
             self.check(f='{}.chk'.format(self.name[0]), verbose=self.parent.verbose, level=1)
-        f_ghb = open(self.fn_path, 'w')
-        f_ghb.write('{}\n'.format(self.heading))
-        f_ghb.write('{:10d}{:10d}'.format(self.stress_period_data.mxact, self.ipakcb))
+        f_ghb = open(self.fn_path, 'wb')
+        out = '{}\n'.format(self.heading)
+        out += '{:10d}{:10d}'.format(self.stress_period_data.mxact, self.ipakcb)
+        # f_ghb.write('{}\n'.format(self.heading))
+        # f_ghb.write('{:10d}{:10d}'.format(self.stress_period_data.mxact, self.ipakcb))
+
         for option in self.options:
-            f_ghb.write('  {}'.format(option))
-        f_ghb.write('\n')
+            out += '  {}'.format(option)
+            # f_ghb.write('  {}'.format(option))
+        out += '\n'
+        f_ghb.write(bytes(out))
+        # f_ghb.write('\n')
         self.stress_period_data.write_transient(f_ghb)
-        f_ghb.close()
+        # f_ghb.close()
 
     def add_record(self, kper, index, values):
         try:

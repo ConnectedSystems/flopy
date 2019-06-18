@@ -295,31 +295,48 @@ class Modflow(BaseModel):
 
         """
         fn_path = os.path.join(self.model_ws, self.namefile)
-        f_nam = open(fn_path, 'w')
-        f_nam.write('{}\n'.format(self.heading))
-        f_nam.write('#' + str(self.sr))
-        f_nam.write(" ;start_datetime:{0}\n".format(self.start_datetime))
+        f_nam = open(fn_path, 'wb')
+
+        out = '{}\n'.format(self.heading)
+        out += '#' + str(self.sr)
+        out += " ;start_datetime:{}\n".format(self.start_datetime)
         if self.version == 'mf2k':
             if self.glo.unit_number[0] > 0:
-                f_nam.write('{:14s} {:5d}  {}\n'.format(self.glo.name[0],
+                out += '{:14s} {:5d}  {}\n'.format(self.glo.name[0],
                                                         self.glo.unit_number[0],
-                                                        self.glo.file_name[0]))
-        f_nam.write('{:14s} {:5d}  {}\n'.format(self.lst.name[0],
+                                                        self.glo.file_name[0])
+        out += '{:14s} {:5d}  {}\n'.format(self.lst.name[0],
                                                 self.lst.unit_number[0],
-                                                self.lst.file_name[0]))
-        f_nam.write('{}'.format(self.get_name_file_entries()))
+                                                self.lst.file_name[0])
+        out += '{}'.format(self.get_name_file_entries())
+        # f_nam.write(out)
+
+        # f_nam.write('{}\n'.format(self.heading))
+        # f_nam.write('#' + str(self.sr))
+        # f_nam.write(" ;start_datetime:{0}\n".format(self.start_datetime))
+        # if self.version == 'mf2k':
+        #     if self.glo.unit_number[0] > 0:
+        #         f_nam.write('{:14s} {:5d}  {}\n'.format(self.glo.name[0],
+        #                                                 self.glo.unit_number[0],
+        #                                                 self.glo.file_name[0]))
+        # f_nam.write('{:14s} {:5d}  {}\n'.format(self.lst.name[0],
+        #                                         self.lst.unit_number[0],
+        #                                         self.lst.file_name[0]))
+        # f_nam.write('{}'.format(self.get_name_file_entries()))
 
         # write the external files
+        # out = ''
+        binary_frm = 'DATA(BINARY)   {:5d}  {} REPLACE\n'
+        data_frm = 'DATA           {:5d}  {}\n'
         for u, f, b in zip(self.external_units, self.external_fnames,
                            self.external_binflag):
             if u == 0:
                 continue
             # fr = os.path.relpath(f, self.model_ws)
             if b:
-                f_nam.write(
-                    'DATA(BINARY)   {0:5d}  '.format(u) + f + ' REPLACE\n')
+                out += binary_frm.format(u, f)
             else:
-                f_nam.write('DATA           {0:5d}  '.format(u) + f + '\n')
+                out += data_frm.format(u, f)
 
         # write the output files
         for u, f, b in zip(self.output_units, self.output_fnames,
@@ -327,14 +344,13 @@ class Modflow(BaseModel):
             if u == 0:
                 continue
             if b:
-                f_nam.write(
-                    'DATA(BINARY)   {0:5d}  '.format(u) + f + ' REPLACE\n')
+                out += binary_frm.format(u, f)
             else:
-                f_nam.write('DATA           {0:5d}  '.format(u) + f + '\n')
+                out += data_frm.format(u, f)
 
         # close the name file
+        f_nam.write(bytes(out))
         f_nam.close()
-        return
 
     def load_results(self, **kwargs):
 

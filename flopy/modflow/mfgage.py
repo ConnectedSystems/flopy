@@ -15,6 +15,9 @@ import numpy as np
 from ..pakbase import Package
 from ..utils import read_fixed_var, write_fixed_var
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class ModflowGage(Package):
     """

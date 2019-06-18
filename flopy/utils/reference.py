@@ -7,6 +7,9 @@ import os
 import numpy as np
 import warnings
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class SpatialReference(object):
     """

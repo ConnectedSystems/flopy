@@ -14,6 +14,9 @@ import numpy as np
 from ..pakbase import Package
 from ..utils import Util2d, Util3d, read1d
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class ModflowSwt(Package):
     """

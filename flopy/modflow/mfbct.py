@@ -1,6 +1,10 @@
+import sys
 import numpy as np
 from ..pakbase import Package
 from ..utils import Util2d, Util3d
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 class ModflowBct(Package):
     '''

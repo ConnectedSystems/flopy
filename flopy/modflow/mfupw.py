@@ -14,6 +14,8 @@ from .mfpar import ModflowPar as mfpar
 from ..pakbase import Package
 from ..utils import Util2d, Util3d
 
+if sys.version_info[0] < 3:
+    range = xrange
 
 class ModflowUpw(Package):
     """
@@ -237,48 +239,115 @@ class ModflowUpw(Package):
         None
 
         """
+        parent = self.parent
         if check:  # allows turning off package checks when writing files at model level
             self.check(f='{}.chk'.format(self.name[0]),
-                       verbose=self.parent.verbose, level=1)
-        nrow, ncol, nlay, nper = self.parent.nrow_ncol_nlay_nper  # Open file for writing
-        f_upw = open(self.fn_path, 'w')
-        # Item 0: text
-        f_upw.write('{}\n'.format(self.heading))
-        # Item 1: IBCFCB, HDRY, NPLPF
-        f_upw.write('{0:10d}{1:10.3G}{2:10d}{3:10d}{4:s}\n'.format(self.ipakcb,
-                                                                   self.hdry,
-                                                                   self.npupw,
-                                                                   self.iphdry,
-                                                                   self.options))
+                       verbose=parent.verbose, level=1)
+        nrow, ncol, nlay, nper = parent.nrow_ncol_nlay_nper  # Open file for writing
+
+        out = '{0:s}\n{1:10d}{2:10.3G}{3:10d}{4:10d}{5:s}\n'.format(self.heading,
+                                                                        self.ipakcb,
+                                                                        self.hdry,
+                                                                        self.npupw,
+                                                                        self.iphdry,
+                                                                        self.options)
         # LAYTYP array
-        f_upw.write(self.laytyp.string);
-        # LAYAVG array
-        f_upw.write(self.layavg.string);
-        # CHANI array
-        f_upw.write(self.chani.string);
-        # LAYVKA array
-        f_upw.write(self.layvka.string)
-        # LAYWET array
-        f_upw.write(self.laywet.string);
-        # Item 7: WETFCT, IWETIT, IHDWET
+        out += '{}{}{}{}{}'.format(self.laytyp.string, self.layavg.string, 
+                                    self.chani.string, self.layvka.string,
+                                    self.laywet.string)
+        
         iwetdry = self.laywet.sum()
         if iwetdry > 0:
             raise Exception('LAYWET should be 0 for UPW')
-        transient = not self.parent.get_package('DIS').steady.all()
+        transient = not parent.get_package('DIS').steady.all()
+
+        _hk = self.hk
+        _hani = self.hani
+        _chani = self.chani
+        _vka = self.vka
+        _ss = self.ss
+        _sy = self.sy
+        _vkcb = self.vkcb
+        _laytyp = self.laytyp
+        _dis_laycbd = parent.get_package('DIS').laycbd
+        _laywet = self.laywet
         for k in range(nlay):
-            f_upw.write(self.hk[k].get_file_entry())
-            if self.chani[k] < 1:
-                f_upw.write(self.hani[k].get_file_entry())
-            f_upw.write(self.vka[k].get_file_entry())
+            out += _hk[k].get_file_entry()
+
+            if _chani[k] < 1:
+                out += _hani[k].get_file_entry()
+            
+            out += _vka[k].get_file_entry()
+
             if transient == True:
-                f_upw.write(self.ss[k].get_file_entry())
-                if self.laytyp[k] != 0:
-                    f_upw.write(self.sy[k].get_file_entry())
-            if self.parent.get_package('DIS').laycbd[k] > 0:
-                f_upw.write(self.vkcb[k].get_file_entry())
-            if (self.laywet[k] != 0 and self.laytyp[k] != 0):
-                f_upw.write(self.laywet[k].get_file_entry())
-        f_upw.close()
+                out += _ss[k].get_file_entry()
+                if _laytyp[k] != 0:
+                    out += _sy[k].get_file_entry()
+                    
+            if _dis_laycbd[k] > 0:
+                out += _vkcb[k].get_file_entry()
+            if (_laywet[k] != 0 and _laytyp[k] != 0):
+                out += _laywet[k].get_file_entry()
+
+        f_upw = open(self.fn_path, 'wb')
+        f_upw.write(bytes(out))
+
+        # with open(self.fn_path, 'w') as f_upw:
+        #     f_upw.write(out)
+        #     # f_upw.flush()
+        #     # os.fsync(f_upw.fileno())
+
+        # self.fn_path = self.fn_path.replace("\\", '/')
+        # s = out.splitlines()
+        # proc = subprocess.Popen(['type', 'NUL', '>', str(self.fn_path)], shell=True)
+        # proc.wait()
+        #
+        # cmd = 'echo {{}} >> {}'.format(self.fn_path)
+        # cmd_str = cmd.format(out)
+        # proc = subprocess.Popen(cmd_str,
+        #                         shell=True,
+        #                         stdin=None, stdout=None, stderr=None, close_fds=True,
+        #                         )  # creationflags=0x00000008
+        
+
+        # f_upw = open(self.fn_path, 'w')
+        # # Item 0: text
+        # f_upw.write('{}\n'.format(self.heading))
+        # # Item 1: IBCFCB, HDRY, NPLPF
+        # f_upw.write('{0:10d}{1:10.3G}{2:10d}{3:10d}{4:s}\n'.format(self.ipakcb,
+        #                                                            self.hdry,
+        #                                                            self.npupw,
+        #                                                            self.iphdry,
+        #                                                            self.options))
+        # # LAYTYP array
+        # f_upw.write(self.laytyp.string);
+        # # LAYAVG array
+        # f_upw.write(self.layavg.string);
+        # # CHANI array
+        # f_upw.write(self.chani.string);
+        # # LAYVKA array
+        # f_upw.write(self.layvka.string)
+        # # LAYWET array
+        # f_upw.write(self.laywet.string);
+        # # Item 7: WETFCT, IWETIT, IHDWET
+        # iwetdry = self.laywet.sum()
+        # if iwetdry > 0:
+        #     raise Exception('LAYWET should be 0 for UPW')
+        # transient = not self.parent.get_package('DIS').steady.all()
+        # for k in range(nlay):
+        #     f_upw.write(self.hk[k].get_file_entry())
+        #     if self.chani[k] < 1:
+        #         f_upw.write(self.hani[k].get_file_entry())
+        #     f_upw.write(self.vka[k].get_file_entry())
+        #     if transient == True:
+        #         f_upw.write(self.ss[k].get_file_entry())
+        #         if self.laytyp[k] != 0:
+        #             f_upw.write(self.sy[k].get_file_entry())
+        #     if self.parent.get_package('DIS').laycbd[k] > 0:
+        #         f_upw.write(self.vkcb[k].get_file_entry())
+        #     if (self.laywet[k] != 0 and self.laytyp[k] != 0):
+        #         f_upw.write(self.laywet[k].get_file_entry())
+        # f_upw.close()
 
     @staticmethod
     def load(f, model, ext_unit_dict=None, check=True):
@@ -348,8 +417,9 @@ class ModflowUpw(Package):
         #     ipakcb = 53
         # options
         noparcheck = False
-        if len(t) > 3:
-            for k in range(3, len(t)):
+        len_t = len(t)
+        if len_t > 3:
+            for k in range(3, len_t):
                 if 'NOPARCHECK' in t[k].upper():
                     noparcheck = True
         # LAYTYP array

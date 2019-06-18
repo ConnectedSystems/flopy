@@ -188,22 +188,38 @@ class ModflowWel(Package):
         None
 
         """
+        spd = self.stress_period_data
         f_wel = open(self.fn_path, 'w')
-        f_wel.write('%s\n' % self.heading)
-        line = (
-        ' {0:9d} {1:9d}'.format(self.stress_period_data.mxact, self.ipakcb))
-
+        line = '{}\n {:9d} {:9d}'.format(self.heading, spd.mxact, 
+                                        self.ipakcb)
         for opt in self.options:
             line += ' ' + str(opt)
         line += '\n'
-        f_wel.write(line)
 
         if self.specify and self.parent.version == 'mfnwt':
-            f_wel.write('SPECIFY {0:10.5g} {1:10d}\n'.format(self.phiramp,
-                                                             self.phiramp_unit))
+            line += 'SPECIFY {:10.5g} {:10d}\n'.format(self.phiramp,
+                                                        self.phiramp_unit)
 
-        self.stress_period_data.write_transient(f_wel)
+        f_wel.write(line)
+        spd.write_transient(f_wel)
         f_wel.close()
+
+        # f_wel = open(self.fn_path, 'w')
+        # f_wel.write('%s\n' % self.heading)
+        # line = (
+        # ' {0:9d} {1:9d}'.format(self.stress_period_data.mxact, self.ipakcb))
+
+        # for opt in self.options:
+        #     line += ' ' + str(opt)
+        # line += '\n'
+        # f_wel.write(line)
+
+        # if self.specify and self.parent.version == 'mfnwt':
+        #     f_wel.write('SPECIFY {0:10.5g} {1:10d}\n'.format(self.phiramp,
+        #                                                      self.phiramp_unit))
+
+        # self.stress_period_data.write_transient(f_wel)
+        # f_wel.close()
 
     def add_record(self, kper, index, values):
         try:

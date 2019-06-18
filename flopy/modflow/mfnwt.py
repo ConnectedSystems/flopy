@@ -281,49 +281,95 @@ class ModflowNwt(Package):
         None
 
         """
-        # Open file for writing
-        f = open(self.fn_path, 'w')
-        f.write('%s\n' % self.heading)
-        f.write('{:10.3e}{:10.3e}{:10d}{:10.3e}{:10d}{:10d}{:10d}'.format(
-                self.headtol, self.fluxtol, self.maxiterout, self.thickfact,
-                self.linmeth, self.iprnwt, self.ibotav))
+        output = "{}\n{:10.3e}{:10.3e}{:10d}{:10.3e}{:10d}{:10d}{:10d}".format(
+            self.heading, self.headtol, self.fluxtol, 
+            self.maxiterout, self.thickfact, self.linmeth,
+            self.iprnwt, self.ibotav)
+
         isspecified = False
-        for option in self.options:
-            f.write('{0:>10s}'.format(option.upper()))
-            if option.lower() == 'specified':
-                isspecified = True
+        if 'specified' in (opt.lower() for opt in self.options):
+            isspecified = True
+
+        output += ''.join('{:>10s}'.format(option.upper()) for option in self.options)
+        # isspecified = False
+        # for option in self.options:
+        #     output += '{:>10s}'.format(option.upper())
+        #     if option.lower() == 'specified':
+        #         isspecified = True
         if isspecified:
-            f.write('{0:10.4g}'.format(self.dbdtheta))
-            f.write('{0:10.4g}'.format(self.dbdkappa))
-            f.write('{0:10.4g}'.format(self.dbdgamma))
-            f.write('{0:10.4g}'.format(self.momfact))
-            f.write('{0:10d}'.format(self.backflag))
+            output += '{:10.4g}{:10.4g}{:10.4g}{:10.4g}{:10d}'.format(
+                self.dbdtheta, self.dbdkappa, self.dbdgamma, self.momfact,
+                self.backflag
+            )
+
             if self.backflag > 0:
-                f.write('{0:10d}'.format(self.maxbackiter))
-                f.write('{0:10.4g}'.format(self.backtol))
-                f.write('{0:10.4g}'.format(self.backreduce))
-            f.write('\n')
+                output += '{:10d}{:10.4g}{:10.4g}'.format(
+                    self.maxbackiter, self.backtol, self.backreduce
+                )
+            
+            output += '\n'
+
             if self.linmeth == 1:
-                f.write('{0:10d}'.format(self.maxitinner))
-                f.write('{0:10d}'.format(self.ilumethod))
-                f.write('{0:10d}'.format(self.levfill))
-                f.write('{0:10.4g}'.format(self.stoptol))
-                f.write('{0:10d}'.format(self.msdr))
+                output += '{:10d}{:10d}{:10d}{:10.4g}{:10d}'.format(
+                    self.maxitinner, self.ilumethod, self.levfill,
+                    self.stoptol, self.msdr
+                )
             elif self.linmeth == 2:
-                f.write('{0:10d}'.format(self.iacl))
-                f.write('{0:10d}'.format(self.norder))
-                f.write('{0:10d}'.format(self.level))
-                f.write('{0:10d}'.format(self.north))
-                f.write('{0:10d}'.format(self.iredsys))
-                f.write('{0:10.4g}'.format(self.rrctols))
-                f.write('{0:10d}'.format(self.idroptol))
-                f.write('{0:10.4g}'.format(self.epsrn))
-                f.write('{0:10.4g}'.format(self.hclosexmd))
-                f.write('{0:10d}'.format(self.mxiterxmd))
+                output += '{:10d}{:10d}{:10d}{:10d}{:10d}{:10.4g}{:10d}{:10.4g}{:10.4g}{:10d}'.format(
+                    self.iacl, self.norder, self.level, self.north, self.iredsys, self.rrctols, self.idroptol,
+                    self.epsrn, self.hclosexmd, self.mxiterxmd
+                )
+        output += '\n'
+        # Open file for writing
+        f = open(self.fn_path, 'wb')
+        f.write(bytes(output))
 
-        f.write('\n')
+        # with open(self.fn_path, 'w') as f:
+        #     f.write(output)
 
-        f.close()
+
+        # f = open(self.fn_path, 'w')
+        # f.write('%s\n' % self.heading)
+        # f.write('{:10.3e}{:10.3e}{:10d}{:10.3e}{:10d}{:10d}{:10d}'.format(
+        #         self.headtol, self.fluxtol, self.maxiterout, self.thickfact,
+        #         self.linmeth, self.iprnwt, self.ibotav))
+        # isspecified = False
+        # for option in self.options:
+        #     f.write('{0:>10s}'.format(option.upper()))
+        #     if option.lower() == 'specified':
+        #         isspecified = True
+        # if isspecified:
+        #     f.write('{0:10.4g}'.format(self.dbdtheta))
+        #     f.write('{0:10.4g}'.format(self.dbdkappa))
+        #     f.write('{0:10.4g}'.format(self.dbdgamma))
+        #     f.write('{0:10.4g}'.format(self.momfact))
+        #     f.write('{0:10d}'.format(self.backflag))
+        #     if self.backflag > 0:
+        #         f.write('{0:10d}'.format(self.maxbackiter))
+        #         f.write('{0:10.4g}'.format(self.backtol))
+        #         f.write('{0:10.4g}'.format(self.backreduce))
+        #     f.write('\n')
+        #     if self.linmeth == 1:
+        #         f.write('{0:10d}'.format(self.maxitinner))
+        #         f.write('{0:10d}'.format(self.ilumethod))
+        #         f.write('{0:10d}'.format(self.levfill))
+        #         f.write('{0:10.4g}'.format(self.stoptol))
+        #         f.write('{0:10d}'.format(self.msdr))
+        #     elif self.linmeth == 2:
+        #         f.write('{0:10d}'.format(self.iacl))
+        #         f.write('{0:10d}'.format(self.norder))
+        #         f.write('{0:10d}'.format(self.level))
+        #         f.write('{0:10d}'.format(self.north))
+        #         f.write('{0:10d}'.format(self.iredsys))
+        #         f.write('{0:10.4g}'.format(self.rrctols))
+        #         f.write('{0:10d}'.format(self.idroptol))
+        #         f.write('{0:10.4g}'.format(self.epsrn))
+        #         f.write('{0:10.4g}'.format(self.hclosexmd))
+        #         f.write('{0:10d}'.format(self.mxiterxmd))
+
+        # f.write('\n')
+
+        # f.close()
 
     @staticmethod
     def load(f, model, ext_unit_dict=None):

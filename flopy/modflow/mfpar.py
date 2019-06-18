@@ -11,6 +11,9 @@ from .mfzon import ModflowZon
 from .mfpval import ModflowPval
 from .mfmlt import ModflowMlt
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 class ModflowPar(object):
     """
     Class for loading mult, zone, pval, and parameter data for MODFLOW packages

@@ -6,6 +6,9 @@ import numpy as np
 from ..pakbase import Package
 from ..utils import Util2d, MfList
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class Mt3dSft(Package):
     """
@@ -358,7 +361,7 @@ class Mt3dSft(Package):
                                                            single_per=kper)
             else:
                 f.write('{0:10d}       # ntmp - SP {1:5d}'.format(0, kper))
-
+        
         f.close()
         return
 

@@ -157,11 +157,14 @@ class ModflowChd(Package):
 
         """
         f_chd = open(self.fn_path, 'w')
-        f_chd.write('{0:s}\n'.format(self.heading))
-        f_chd.write(' {0:9d}'.format(self.stress_period_data.mxact))
+        out = '{:s}\n {:9d}'.format(self.heading, 
+                                    self.stress_period_data.mxact)
+
         for option in self.options:
-            f_chd.write('  {}'.format(option))
-        f_chd.write('\n')
+            out += '  {}'.format(option)
+            # f_chd.write('  {}'.format(option))
+        out += '\n'
+        f_chd.write(out)
         self.stress_period_data.write_transient(f_chd)
         f_chd.close()
 

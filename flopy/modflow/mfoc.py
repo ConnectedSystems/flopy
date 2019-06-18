@@ -12,6 +12,9 @@ import sys
 
 from ..pakbase import Package
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class ModflowOc(Package):
     """
@@ -315,40 +318,32 @@ class ModflowOc(Package):
         None
 
         """
-        f_oc = open(self.fn_path, 'w')
-        f_oc.write('{}\n'.format(self.heading))
+        f_oc = open(self.fn_path, 'wb')
 
-        # write options
-        line = 'HEAD PRINT FORMAT {0:3.0f}\n'.format(self.ihedfm)
-        f_oc.write(line)
+        line = '{}\n'.format(self.heading)
+        line += 'HEAD PRINT FORMAT {:3.0f}\n'.format(self.ihedfm)
+
         if self.chedfm is not None:
-            line = 'HEAD SAVE FORMAT {0:20s} LABEL\n'.format(self.chedfm)
-            f_oc.write(line)
+            line += 'HEAD SAVE FORMAT {:20s} LABEL\n'.format(self.chedfm)
+        
         if self.savehead:
-            line = 'HEAD SAVE UNIT {0:5.0f}\n'.format(self.iuhead)
-            f_oc.write(line)
-
-        f_oc.write('DRAWDOWN PRINT FORMAT {0:3.0f}\n'.format(self.iddnfm))
+            line += 'HEAD SAVE UNIT {:5.0f}\n'.format(self.iuhead)
+        
+        line += 'DRAWDOWN PRINT FORMAT {:3.0f}\n'.format(self.iddnfm)
         if self.cddnfm is not None:
-            line = 'DRAWDOWN SAVE FORMAT {0:20s} LABEL\n'.format(self.cddnfm)
-            f_oc.write(line)
+            line += 'DRAWDOWN SAVE FORMAT {:20s} LABEL\n'.format(self.cddnfm)
         if self.saveddn:
-            line = 'DRAWDOWN SAVE UNIT {0:5.0f}\n'.format(self.iuddn)
-            f_oc.write(line)
-
+            line += 'DRAWDOWN SAVE UNIT {:5.0f}\n'.format(self.iuddn)
         if self.saveibnd:
             if self.cboufm is not None:
-                line = 'IBOUND SAVE FORMAT {0:20s} LABEL\n'.format(self.cboufm)
-                f_oc.write(line)
-            line = 'IBOUND SAVE UNIT {0:5.0f}\n'.format(self.iuibnd)
-            f_oc.write(line)
-
+                line += 'IBOUND SAVE FORMAT {:20s} LABEL\n'.format(self.cboufm)
+            line += 'IBOUND SAVE UNIT {:5.0f}\n'.format(self.iuibnd)
         if self.compact:
-            f_oc.write('COMPACT BUDGET AUX\n')
+            line += 'COMPACT BUDGET AUX\n'
 
         # add a line separator between header and stress
         #  period data
-        f_oc.write('\n')
+        line += '\n'
 
         # write the transient sequence described by the data dict
         nr, nc, nl, nper = self.parent.get_nrow_ncol_nlay_nper()
@@ -359,6 +354,8 @@ class ModflowOc(Package):
 
         keys = list(self.stress_period_data.keys())
         keys.sort()
+
+        f_oc.write(bytes(line))
 
         data = []
         lines = ''
@@ -378,15 +375,84 @@ class ModflowOc(Package):
                             else:
                                 lines += '{}\n'.format(item)
                 if len(lines) > 0:
-                    f_oc.write(
+                    f_oc.write(bytes(
                         'period {} step {} {}\n'.format(kper + 1, kstp + 1,
-                                                        ddnref))
-                    f_oc.write(lines)
-                    f_oc.write('\n')
+                                                        ddnref)))
+                    f_oc.write(bytes(lines+'\n'))
                     ddnref = ''
 
-        # close oc file
-        f_oc.close()
+
+        # f_oc.write('{}\n'.format(self.heading))
+
+        # # write options
+        # line = 'HEAD PRINT FORMAT {0:3.0f}\n'.format(self.ihedfm)
+        # f_oc.write(line)
+        # if self.chedfm is not None:
+        #     line = 'HEAD SAVE FORMAT {0:20s} LABEL\n'.format(self.chedfm)
+        #     f_oc.write(line)
+        # if self.savehead:
+        #     line = 'HEAD SAVE UNIT {0:5.0f}\n'.format(self.iuhead)
+        #     f_oc.write(line)
+
+        # f_oc.write('DRAWDOWN PRINT FORMAT {0:3.0f}\n'.format(self.iddnfm))
+        # if self.cddnfm is not None:
+        #     line = 'DRAWDOWN SAVE FORMAT {0:20s} LABEL\n'.format(self.cddnfm)
+        #     f_oc.write(line)
+        # if self.saveddn:
+        #     line = 'DRAWDOWN SAVE UNIT {0:5.0f}\n'.format(self.iuddn)
+        #     f_oc.write(line)
+
+        # if self.saveibnd:
+        #     if self.cboufm is not None:
+        #         line = 'IBOUND SAVE FORMAT {0:20s} LABEL\n'.format(self.cboufm)
+        #         f_oc.write(line)
+        #     line = 'IBOUND SAVE UNIT {0:5.0f}\n'.format(self.iuibnd)
+        #     f_oc.write(line)
+
+        # if self.compact:
+        #     f_oc.write('COMPACT BUDGET AUX\n')
+
+        # # add a line separator between header and stress
+        # #  period data
+        # f_oc.write('\n')
+
+        # # write the transient sequence described by the data dict
+        # nr, nc, nl, nper = self.parent.get_nrow_ncol_nlay_nper()
+        # dis = self.parent.get_package('DIS')
+        # if dis is None:
+        #     dis = self.parent.get_package('DISU')
+        # nstp = dis.nstp
+
+        # keys = list(self.stress_period_data.keys())
+        # keys.sort()
+
+        # data = []
+        # lines = ''
+        # ddnref = ''
+        # for kper in range(nper):
+        #     for kstp in range(nstp[kper]):
+        #         kperkstp = (kper, kstp)
+        #         if kperkstp in keys:
+        #             data = self.stress_period_data[kperkstp]
+        #             if not isinstance(data, list):
+        #                 data = [data]
+        #             lines = ''
+        #             if len(data) > 0:
+        #                 for item in data:
+        #                     if 'DDREFERENCE' in item.upper():
+        #                         ddnref = item.lower()
+        #                     else:
+        #                         lines += '{}\n'.format(item)
+        #         if len(lines) > 0:
+        #             f_oc.write(
+        #                 'period {} step {} {}\n'.format(kper + 1, kstp + 1,
+        #                                                 ddnref))
+        #             f_oc.write(lines)
+        #             f_oc.write('\n')
+        #             ddnref = ''
+
+        # # close oc file
+        # f_oc.close()
 
     @staticmethod
     def get_ocoutput_units(f, ext_unit_dict=None):

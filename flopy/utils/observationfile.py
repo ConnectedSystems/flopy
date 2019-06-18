@@ -3,6 +3,10 @@ import numpy as np
 
 from ..utils.utils_def import FlopyBinaryData
 
+import sys
+if sys.version_info[0] < 3:
+    range = xrange
+
 class ObsFiles(FlopyBinaryData):
     def __init__(self):
         super(ObsFiles, self).__init__()

@@ -4,7 +4,10 @@ from ..pakbase import Package
 from .mpsim import ModpathSim
 from .mpbas import ModpathBas
 import os
+import sys
 
+if sys.version_info[0] < 3:
+    range = xrange
 
 class ModpathList(Package):
     '''

@@ -8,6 +8,9 @@ from itertools import groupby
 from collections import OrderedDict
 from ..utils.utils_def import totim_to_datetime
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class ZoneBudget(object):
     """

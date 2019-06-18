@@ -16,6 +16,10 @@ from numpy.lib.recfunctions import stack_arrays
 from .modflow.mfparbc import ModflowParBc as mfparbc
 from .utils import Util2d, Util3d, Transient2d, MfList, check
 
+import sys
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class Package(object):
     """

@@ -15,6 +15,9 @@ from ..pakbase import Package
 from ..utils import Util2d, Transient2d, check
 from ..modflow.mfparbc import  ModflowParBc as mfparbc
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 class ModflowRch(Package):
     """
     MODFLOW Recharge Package Class.
@@ -252,21 +255,22 @@ class ModflowRch(Package):
         nrow, ncol, nlay, nper = self.parent.nrow_ncol_nlay_nper
         # Open file for writing
         f_rch = open(self.fn_path, 'w')
-        f_rch.write('{0:s}\n'.format(self.heading))
-        f_rch.write('{0:10d}{1:10d}\n'.format(self.nrchop, self.ipakcb))
+        out = '{:s}\n'.format(self.heading)
+        out += '{:10d}{:10d}\n'.format(self.nrchop, self.ipakcb)
         for kper in range(nper):
             inrech, file_entry_rech = self.rech.get_kper_entry(kper)
             if self.nrchop == 2:
                 inirch, file_entry_irch = self.irch.get_kper_entry(kper)
             else:
                 inirch = -1
-            f_rch.write('{0:10d}{1:10d} # {2:s}\n'.format(inrech,
-                                                          inirch, "Stress period " + str(kper + 1)))
+            out += '{:10d}{:10d} # {:s}\n'.format(inrech,
+                                                  inirch, "Stress period " + str(kper + 1))
             if (inrech >= 0):
-                f_rch.write(file_entry_rech)
+                out += file_entry_rech
             if self.nrchop == 2:
                 if inirch >= 0:
-                    f_rch.write(file_entry_irch)
+                    out += file_entry_irch
+        f_rch.write(out)
         f_rch.close()
 
     @staticmethod

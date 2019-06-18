@@ -12,6 +12,11 @@ from numpy import empty, array
 from ..pakbase import Package
 from ..utils import Util2d, Util3d
 
+import sys
+
+if sys.version_info[0] < 3:
+    range = xrange
+
 class ModpathBas(Package):
     """
     MODPATH Basic Package Class.

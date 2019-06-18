@@ -1,4 +1,5 @@
 from __future__ import print_function
+import sys
 import numpy as np
 from ..utils import Util2d, Util3d, Transient2d, MfList, \
     HeadFile, CellBudgetFile, UcnFile, FormattedHeadFile
@@ -6,6 +7,9 @@ from ..mbase import BaseModel
 from ..pakbase import Package
 from . import NetCdf, netcdf
 from . import shapefile_utils
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 NC_UNITS_FORMAT = {"hk": "{0}/{1}", "sy": "", "ss": "1/{0}", "rech": "{0}/{1}",
                    "strt": "{0}",

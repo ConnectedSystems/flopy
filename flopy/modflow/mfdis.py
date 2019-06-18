@@ -7,7 +7,7 @@ MODFLOW Guide
 <http://water.usgs.gov/ogw/modflow/MODFLOW-2005-Guide/index.html?dis.htm>`_.
 
 """
-
+import os
 import sys
 import warnings
 
@@ -15,6 +15,9 @@ import numpy as np
 
 from ..pakbase import Package
 from ..utils import Util2d, Util3d, reference, check
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 ITMUNI = {"u": 0, "s": 1, "m": 2, "h": 3, "d": 4, "y": 5}
 LENUNI = {"u": 0, "f": 1, "m": 2, "c": 3}
@@ -600,40 +603,73 @@ class ModflowDis(Package):
         if check:  # allows turning off package checks when writing files at model level
             self.check(f='{}.chk'.format(self.name[0]),
                        verbose=self.parent.verbose, level=1)
-        # Open file for writing
-        f_dis = open(self.fn_path, 'w')
-        # Item 0: heading        
-        f_dis.write('{0:s}\n'.format(self.heading))
-        # f_dis.write('#{0:s}'.format(str(self.sr)))
-        # f_dis.write(" ,{0:s}:{1:s}\n".format("start_datetime",
-        #                                    self.start_datetime))
-        # Item 1: NLAY, NROW, NCOL, NPER, ITMUNI, LENUNI
-        f_dis.write('{0:10d}{1:10d}{2:10d}{3:10d}{4:10d}{5:10d}\n' \
-                    .format(self.nlay, self.nrow, self.ncol, self.nper,
-                            self.itmuni, self.lenuni))
-        # Item 2: LAYCBD
-        for l in range(0, self.nlay):
-            f_dis.write('{0:3d}'.format(self.laycbd[l]))
-        f_dis.write('\n')
-        # Item 3: DELR
-        f_dis.write(self.delr.get_file_entry())
-        # Item 4: DELC       
-        f_dis.write(self.delc.get_file_entry())
-        # Item 5: Top(NCOL, NROW)
-        f_dis.write(self.top.get_file_entry())
-        # Item 5: BOTM(NCOL, NROW)        
-        f_dis.write(self.botm.get_file_entry())
 
-        # Item 6: NPER, NSTP, TSMULT, Ss/tr
-        for t in range(self.nper):
-            f_dis.write('{0:14f}{1:14d}{2:10f} '.format(self.perlen[t],
-                                                        self.nstp[t],
-                                                        self.tsmult[t]))
-            if self.steady[t]:
-                f_dis.write(' {0:3s}\n'.format('SS'))
-            else:
-                f_dis.write(' {0:3s}\n'.format('TR'))
-        f_dis.close()
+        if os.path.isfile(self.fn_path):
+            # This is all constant so don't bother re-writing
+            return
+
+        with open(self.fn_path, 'w') as f_dis:
+            out = '{:s}\n{:10d}{:10d}{:10d}{:10d}{:10d}{:10d}\n'.format(
+                self.heading, self.nlay, self.nrow, self.ncol, self.nper,
+                self.itmuni, self.lenuni
+            )
+
+            # Item 2: LAYCBD
+            for l in range(self.nlay):
+                out += '{:3d}'.format(self.laycbd[l])
+            out += '\n{}{}{}{}'.format(
+                self.delr.get_file_entry(),
+                self.delc.get_file_entry(),
+                self.top.get_file_entry(),
+                self.botm.get_file_entry()
+            )
+
+            # Item 6: NPER, NSTP, TSMULT, Ss/tr
+            _steady = self.steady
+            for t in range(self.nper):
+                form = 'SS' if _steady[t] else 'TR'
+                out += '{:14f}{:14d}{:10f}  {:3s}\n'.format(self.perlen[t],
+                                                            self.nstp[t],
+                                                            self.tsmult[t],
+                                                            form)
+            
+            f_dis.write(out)
+        
+
+        # # Open file for writing
+        # f_dis = open(self.fn_path, 'w')
+        # # Item 0: heading        
+        # f_dis.write('{0:s}\n'.format(self.heading))
+        # # f_dis.write('#{0:s}'.format(str(self.sr)))
+        # # f_dis.write(" ,{0:s}:{1:s}\n".format("start_datetime",
+        # #                                    self.start_datetime))
+        # # Item 1: NLAY, NROW, NCOL, NPER, ITMUNI, LENUNI
+        # f_dis.write('{0:10d}{1:10d}{2:10d}{3:10d}{4:10d}{5:10d}\n' \
+        #             .format(self.nlay, self.nrow, self.ncol, self.nper,
+        #                     self.itmuni, self.lenuni))
+        # # Item 2: LAYCBD
+        # for l in range(0, self.nlay):
+        #     f_dis.write('{0:3d}'.format(self.laycbd[l]))
+        # f_dis.write('\n')
+        # # Item 3: DELR
+        # f_dis.write(self.delr.get_file_entry())
+        # # Item 4: DELC       
+        # f_dis.write(self.delc.get_file_entry())
+        # # Item 5: Top(NCOL, NROW)
+        # f_dis.write(self.top.get_file_entry())
+        # # Item 5: BOTM(NCOL, NROW)        
+        # f_dis.write(self.botm.get_file_entry())
+
+        # # Item 6: NPER, NSTP, TSMULT, Ss/tr
+        # for t in range(self.nper):
+        #     f_dis.write('{0:14f}{1:14d}{2:10f} '.format(self.perlen[t],
+        #                                                 self.nstp[t],
+        #                                                 self.tsmult[t]))
+        #     if self.steady[t]:
+        #         f_dis.write(' {0:3s}\n'.format('SS'))
+        #     else:
+        #         f_dis.write(' {0:3s}\n'.format('TR'))
+        # f_dis.close()
 
     def check(self, f=None, verbose=True, level=1):
         """

@@ -13,6 +13,9 @@ import numpy as np
 from ..utils import MfList
 from ..pakbase import Package
 
+if sys.version_info[0] < 3:
+    range = xrange
+
 
 class ModflowStr(Package):
     """

@@ -8,10 +8,14 @@ important classes that can be accessed by the user.
 
 """
 from __future__ import print_function
+import sys
 import numpy as np
 import warnings
 from collections import OrderedDict
 from ..utils.datafile import Header, LayerFile
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 
 class BinaryHeader(Header):
@@ -137,15 +141,19 @@ def binaryread(file, vartype, shape=(1), charlen=16):
 
     # read a string variable of length charlen
     if vartype == str:
-        result = file.read(charlen * 1)
+        result = file.read(charlen)
     else:
         # find the number of values
         nval = np.core.fromnumeric.prod(shape)
         result = np.fromfile(file, vartype, nval)
-        if nval == 1:
-            result = result  # [0]
-        else:
+
+        if nval != 1:
             result = np.reshape(result, shape)
+
+        # if nval == 1:
+        #     result = result  # [0]
+        # else:
+        #     result = np.reshape(result, shape)
     return result
 
 
@@ -966,6 +974,8 @@ class CellBudgetFile(object):
                          times.  Or you may access this file using the
                          kstp and kper arguments or the idx argument.'''
                 raise Exception(errmsg)
+        
+        recarray = self.recordarray
 
         # check and make sure that text is in file
         text16 = None
@@ -980,46 +990,45 @@ class CellBudgetFile(object):
             kper1 = kstpkper[1] + 1
             if text is None and paknam is None:
                 select_indices = np.where(
-                    (self.recordarray['kstp'] == kstp1) &
-                    (self.recordarray['kper'] == kper1))
+                    (recarray['kstp'] == kstp1) &
+                    (recarray['kper'] == kper1))
             else:
                 if paknam is None and text is not None:
                     select_indices = np.where(
-                        (self.recordarray['kstp'] == kstp1) &
-                        (self.recordarray['kper'] == kper1) &
-                        (self.recordarray['text'] == text16))
+                        (recarray['kstp'] == kstp1) &
+                        (recarray['kper'] == kper1) &
+                        (recarray['text'] == text16))
                 elif text is None and paknam is not None:
                     select_indices = np.where(
-                        (self.recordarray['kstp'] == kstp1) &
-                        (self.recordarray['kper'] == kper1) &
-                        (self.recordarray['paknam'] == paknam16))
+                        (recarray['kstp'] == kstp1) &
+                        (recarray['kper'] == kper1) &
+                        (recarray['paknam'] == paknam16))
                 else:
                     select_indices = np.where(
-                        (self.recordarray['kstp'] == kstp1) &
-                        (self.recordarray['kper'] == kper1) &
-                        (self.recordarray['text'] == text16) &
-                        (self.recordarray['paknam'] == paknam16))
+                        (recarray['kstp'] == kstp1) &
+                        (recarray['kper'] == kper1) &
+                        (recarray['text'] == text16) &
+                        (recarray['paknam'] == paknam16))
 
 
         elif totim is not None:
             if text is None and paknam is None:
                 select_indices = np.where(
-                    (self.recordarray['totim'] == totim))
+                    (recarray['totim'] == totim))
             else:
                 if paknam is None and text is not None:
                     select_indices = np.where(
-                        (self.recordarray['totim'] == totim) &
-                        (self.recordarray['text'] == text16))
+                        (recarray['totim'] == totim) &
+                        (recarray['text'] == text16))
                 elif text is None and paknam is not None:
                     select_indices = np.where(
-                        (self.recordarray['totim'] == totim) &
-                        (self.recordarray['paknam'] == paknam16))
+                        (recarray['totim'] == totim) &
+                        (recarray['paknam'] == paknam16))
                 else:
                     select_indices = np.where(
-                        (self.recordarray['totim'] == totim) &
-                        (self.recordarray['text'] == text16) &
-                        (self.recordarray['paknam'] == paknam16))
-
+                        (recarray['totim'] == totim) &
+                        (recarray['text'] == text16) &
+                        (recarray['paknam'] == paknam16))
 
         # allow for idx to be a list or a scalar
         elif idx is not None:
@@ -1035,10 +1044,12 @@ class CellBudgetFile(object):
         # build and return the record list
         if isinstance(select_indices, tuple):
             select_indices = select_indices[0]
-        recordlist = []
-        for idx in select_indices:
-            rec = self.get_record(idx, full3D=full3D)
-            recordlist.append(rec)
+
+        recordlist = [self.get_record(idx, full3D=full3D) for idx in select_indices]
+        # recordlist = []
+        # for idx in select_indices:
+        #     rec = self.get_record(idx, full3D=full3D)
+        #     recordlist.append(rec)
 
         return recordlist
 

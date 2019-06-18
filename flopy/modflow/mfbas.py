@@ -7,11 +7,14 @@ MODFLOW Guide
 <http://water.usgs.gov/ogw/modflow/MODFLOW-2005-Guide/index.html?bas6.htm>`_.
 
 """
-
+import os
 import sys
 import numpy as np
 from ..pakbase import Package
 from ..utils import Util3d, check, get_neighbors
+
+if sys.version_info[0] < 3:
+    range = xrange
 
 class ModflowBas(Package):
     """
@@ -207,12 +210,7 @@ class ModflowBas(Package):
         """
         if check: # allows turning off package checks when writing files at model level
             self.check(f='{}.chk'.format(self.name[0]), verbose=self.parent.verbose, level=1)
-        # Open file for writing
-        f_bas = open(self.fn_path, 'w')
-        # First line: heading
-        #f_bas.write('%s\n' % self.heading)
-        f_bas.write('{0:s}\n'.format(self.heading))
-        # Second line: format specifier
+        
         self.options = ''
         if self.ixsec:
             self.options += 'XSECTION'
@@ -222,15 +220,50 @@ class ModflowBas(Package):
             self.options += ' FREE'
         if self.stoper is not None:
             self.options += ' STOPERROR {0}'.format(self.stoper)
-        f_bas.write('{0:s}\n'.format(self.options))
-        # IBOUND array
-        f_bas.write(self.ibound.get_file_entry())
-        # Head in inactive cells
-        f_bas.write('{0:15.6G}\n'.format(self.hnoflo))
-        # Starting heads array
-        f_bas.write(self.strt.get_file_entry())
-        # Close file
+        
+        out = '{:s}\n{:s}\n{}{:15.6G}\n{}'.format(
+                    self.heading, self.options, self.ibound.get_file_entry(), 
+                    self.hnoflo, self.strt.get_file_entry())
+
+        f_bas = open(self.fn_path, 'wb')
+        f_bas.write(bytes(out))
         f_bas.close()
+
+        # with open(self.fn_path, 'w') as f_bas:
+        #     # f_bas.write('{0:s}\n'.format(self.heading))
+
+        #     # Write header, options, IBOUND array, head in inactive cells, 
+        #     # and starting heads array
+        #     out = '{}\n{:s}\n{}{:15.6G}\n{}'.format(
+        #             self.heading, self.options, self.ibound.get_file_entry(), 
+        #             self.hnoflo, self.strt.get_file_entry())
+            
+        #     f_bas.write(out)
+
+        # # Open file for writing
+        # f_bas = open(self.fn_path, 'w')
+        # # First line: heading
+        # #f_bas.write('%s\n' % self.heading)
+        # f_bas.write('{0:s}\n'.format(self.heading))
+        # # Second line: format specifier
+        # self.options = ''
+        # if self.ixsec:
+        #     self.options += 'XSECTION'
+        # if self.ichflg:
+        #     self.options += ' CHTOCH'
+        # if self.ifrefm:
+        #     self.options += ' FREE'
+        # if self.stoper is not None:
+        #     self.options += ' STOPERROR {0}'.format(self.stoper)
+        # f_bas.write('{0:s}\n'.format(self.options))
+        # # IBOUND array
+        # f_bas.write(self.ibound.get_file_entry())
+        # # Head in inactive cells
+        # f_bas.write('{0:15.6G}\n'.format(self.hnoflo))
+        # # Starting heads array
+        # f_bas.write(self.strt.get_file_entry())
+        # # Close file
+        # f_bas.close()
 
     @staticmethod
     def load(f, model, nlay=None, nrow=None, ncol=None, ext_unit_dict=None, check=True):
