@@ -2,6 +2,7 @@ from __future__ import print_function
 import numpy as np
 from ..utils.util_array import Util3d as Util3d
 from ..utils.util_array import Transient2d as Transient2d
+import itertools as it
 
 def get_template_array(pakarray):
     """
@@ -160,8 +161,9 @@ class Util2dTpl(object):
         file_entry : str
 
         """
-        ncol = self.chararray.shape[-1]
-        au = np.unique(self.chararray)
+        _chararray = self.chararray 
+        ncol = _chararray.shape[-1]
+        au = np.unique(_chararray)
         if au.shape[0] == 1 and self.multiplier is None:
             file_entry = 'CONSTANT {0}    #{1}\n'.format(au[0], self.name)
         else:
@@ -171,13 +173,15 @@ class Util2dTpl(object):
             cr = 'INTERNAL {0} (FREE) -1      #{1}\n'.format(mult, self.name)
             astring = ''
             icount = 0
-            for i in range(self.chararray.shape[0]):
-                for j in range(self.chararray.shape[1]):
+            _i, _j = _chararray.shape[0], _chararray.shape[1]
+            # for i, j in it.product(range(_i), range(_j)):
+            for i in range(_i):
+                for j in range(_j):
                     icount += 1
-                    astring += ' {0:>15s}'.format(self.chararray[i, j])
+                    astring = '{} {0:>15s}'.format(astring, _chararray[i, j])
                     if icount == 10 or j == ncol - 1:
-                        astring += '\n'
+                        astring = '{}\n'.format(astring)
                         icount = 0
-            file_entry = cr + astring
+            file_entry = '{}{}'.format(cr, astring)
         return file_entry
 
