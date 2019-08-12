@@ -323,6 +323,7 @@ class ModflowNwt(Package):
         # Open file for writing
         f = open(self.fn_path, 'wb')
         f.write(bytes(output))
+        f.close()
 
         # with open(self.fn_path, 'w') as f:
         #     f.write(output)

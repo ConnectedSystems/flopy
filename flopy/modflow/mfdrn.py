@@ -208,7 +208,7 @@ class ModflowDrn(Package):
         line += '\n'
         f_drn.write(line)
         spd.write_transient(f_drn)
-        # f_drn.close()
+        f_drn.close()
 
     def add_record(self, kper, index, values):
         try:

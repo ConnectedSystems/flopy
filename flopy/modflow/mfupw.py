@@ -291,6 +291,7 @@ class ModflowUpw(Package):
 
         f_upw = open(self.fn_path, 'wb')
         f_upw.write(bytes(out))
+        f_upw.close()
 
         # with open(self.fn_path, 'w') as f_upw:
         #     f_upw.write(out)

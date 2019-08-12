@@ -199,9 +199,8 @@ class ModflowGhb(Package):
             # f_ghb.write('  {}'.format(option))
         out += '\n'
         f_ghb.write(bytes(out))
-        # f_ghb.write('\n')
         self.stress_period_data.write_transient(f_ghb)
-        # f_ghb.close()
+        f_ghb.close()
 
     def add_record(self, kper, index, values):
         try:
