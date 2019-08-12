@@ -1326,7 +1326,7 @@ def run_model(basestring exe_name, basestring namefile, basestring model_ws='./'
             # c = c.rstrip('\r\n')
             if target_msg in c.lower():
                 success = True
-                return success, buffer
+                return success, buff
 
             # for msg in normal_msg:
             #     if msg in c.lower():
